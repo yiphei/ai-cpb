@@ -52,22 +52,31 @@ final class PasteController {
             return
         }
 
+        // Show the floating spinner only AFTER the screenshot is encoded, so the
+        // HUD never lands in the destination image we send to the model.
+        await PasteIndicator.shared.show(near: focused?.rect, on: destScreen)
+
         let text: String
         do {
             text = try await AnthropicClient(apiKey: apiKey)
                 .paste(copyPng: payload.imagePng, destPng: destPng)
         } catch {
+            await PasteIndicator.shared.hide()
             Notify.error("AI call failed", error.localizedDescription)
             MenuBar.shared.flash(.idle)
             return
         }
 
         guard text != "<<NO_PASTE>>" else {
+            await PasteIndicator.shared.hide()
             Notify.error("AI declined to paste",
                          "Claude couldn't infer what to paste. Try giving it a clearer copy or target field.")
             MenuBar.shared.flash(.idle)
             return
         }
+
+        // Hide before the synthesized ⌘V so the HUD doesn't overlap the actual paste.
+        await PasteIndicator.shared.hide()
 
         let saved = PasteboardDriver.snapshot()
         PasteboardDriver.writeString(text)
