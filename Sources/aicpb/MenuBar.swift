@@ -14,10 +14,30 @@ final class MenuBar {
     private var flashWorkItem: DispatchWorkItem?
 
     func install() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        NSLog("ai-cpb: MenuBar.install() entered")
+        // Use a fixed, generous width so macOS cannot shrink us to 0pt.
+        statusItem = NSStatusBar.system.statusItem(withLength: 90)
+        statusItem.autosaveName = "com.local.aicpb.status"
+        statusItem.isVisible = true
+        NSLog("ai-cpb: NSStatusItem length=\(statusItem.length), isVisible=\(statusItem.isVisible)")
         if let button = statusItem.button {
-            button.image = symbol("wand.and.stars")
-            button.image?.isTemplate = true
+            button.title = "AI-CPB"
+            button.font = NSFont.boldSystemFont(ofSize: 13)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if let win = button.window {
+                    NSLog("ai-cpb: status item window frame = \(win.frame), screen = \(win.screen?.frame ?? .zero)")
+                }
+            }
+            if let img = symbol("wand.and.stars") {
+                img.isTemplate = true
+                button.image = img
+                button.imagePosition = .imageLeft
+                NSLog("ai-cpb: set wand image + title on status button")
+            } else {
+                NSLog("ai-cpb: SF Symbol missing; using text title only")
+            }
+        } else {
+            NSLog("ai-cpb: NSStatusItem has nil button (!)")
         }
 
         let menu = NSMenu()

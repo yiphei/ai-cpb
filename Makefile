@@ -34,8 +34,14 @@ $(APP_BUNDLE): $(EXE) $(INFO_PLIST_SRC)
 	@mkdir -p "$(MACOS_DIR)" "$(RES_DIR)"
 	@cp "$(EXE)" "$(MACOS_DIR)/$(EXE_NAME)"
 	@cp "$(INFO_PLIST_SRC)" "$(CONTENTS)/Info.plist"
-	@echo "→ Codesigning (ad-hoc)"
-	@codesign -s - --force --deep "$(APP_BUNDLE)" 2>&1 | sed 's/^/   /'
+	@echo "→ Codesigning"
+	@if security find-identity -v -p codesigning | grep -q "ai-cpb-local"; then \
+		echo "   using stable identity: ai-cpb-local"; \
+		codesign -s "ai-cpb-local" --force --deep "$(APP_BUNDLE)" 2>&1 | sed 's/^/   /'; \
+	else \
+		echo "   (no ai-cpb-local cert found; falling back to ad-hoc — TCC will re-prompt on every build)"; \
+		codesign -s - --force --deep "$(APP_BUNDLE)" 2>&1 | sed 's/^/   /'; \
+	fi
 	@echo "✓ Built $(APP_BUNDLE)"
 
 run: build
