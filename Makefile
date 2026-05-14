@@ -35,7 +35,7 @@ $(APP_BUNDLE): $(EXE) $(INFO_PLIST_SRC)
 	@cp "$(EXE)" "$(MACOS_DIR)/$(EXE_NAME)"
 	@cp "$(INFO_PLIST_SRC)" "$(CONTENTS)/Info.plist"
 	@echo "→ Codesigning"
-	@if security find-identity -v -p codesigning | grep -q "ai-cpb-local"; then \
+	@if security find-identity -p codesigning | grep -q "ai-cpb-local"; then \
 		echo "   using stable identity: ai-cpb-local"; \
 		codesign -s "ai-cpb-local" --force --deep "$(APP_BUNDLE)" 2>&1 | sed 's/^/   /'; \
 	else \
