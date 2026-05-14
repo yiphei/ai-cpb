@@ -27,6 +27,41 @@ enum ScreenCapturer {
         let rep = NSBitmapImageRep(cgImage: image)
         return rep.representation(using: .png, properties: [:])
     }
+
+    /// Resize + JPEG-encode for the Anthropic vision API. Anthropic recommends
+    /// the longest edge ≤ 1568px and enforces a 5 MB per-image limit.
+    static func encodeForAI(_ image: CGImage, maxEdge: CGFloat = 1568, quality: CGFloat = 0.85) -> (data: Data, mediaType: String)? {
+        let w = CGFloat(image.width)
+        let h = CGFloat(image.height)
+        let longest = max(w, h)
+        let scale = longest > maxEdge ? maxEdge / longest : 1.0
+        let newW = Int((w * scale).rounded())
+        let newH = Int((h * scale).rounded())
+
+        let resized: CGImage
+        if scale < 1.0,
+           let ctx = CGContext(
+               data: nil,
+               width: newW,
+               height: newH,
+               bitsPerComponent: 8,
+               bytesPerRow: 0,
+               space: CGColorSpaceCreateDeviceRGB(),
+               bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+           ) {
+            ctx.interpolationQuality = .high
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: newW, height: newH))
+            resized = ctx.makeImage() ?? image
+        } else {
+            resized = image
+        }
+
+        let rep = NSBitmapImageRep(cgImage: resized)
+        if let jpeg = rep.representation(using: .jpeg, properties: [.compressionFactor: quality]) {
+            return (jpeg, "image/jpeg")
+        }
+        return nil
+    }
 }
 
 @available(macOS, deprecated: 14.0, message: "Uses CGDisplayCreateImage; intentional for MVP")

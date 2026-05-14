@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct AnthropicClient {
@@ -28,6 +29,9 @@ struct AnthropicClient {
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.timeoutInterval = 25
 
+        let copyBlock = try AnthropicClient.imageBlock(from: copyPng, label: "copy")
+        let destBlock = try AnthropicClient.imageBlock(from: destPng, label: "destination")
+
         let body: [String: Any] = [
             "model": AnthropicClient.model,
             "max_tokens": 1024,
@@ -35,23 +39,9 @@ struct AnthropicClient {
             "messages": [[
                 "role": "user",
                 "content": [
-                    [
-                        "type": "image",
-                        "source": [
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": copyPng.base64EncodedString()
-                        ] as [String: Any]
-                    ] as [String: Any],
+                    copyBlock,
                     ["type": "text", "text": "Image 1 = copied content."],
-                    [
-                        "type": "image",
-                        "source": [
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": destPng.base64EncodedString()
-                        ] as [String: Any]
-                    ] as [String: Any],
+                    destBlock,
                     ["type": "text", "text": "Image 2 = paste destination (red rectangle marks the target input field)."]
                 ]
             ]]
@@ -87,5 +77,29 @@ struct AnthropicClient {
         }
         throw NSError(domain: "ai-cpb", code: -3,
                       userInfo: [NSLocalizedDescriptionKey: "No text content in response."])
+    }
+
+    /// Decode the PNG, resize + JPEG-encode, and wrap as an Anthropic image content block.
+    /// Anthropic caps each image at 5 MB; raw Retina screenshots blow past that, so we always recompress.
+    private static func imageBlock(from png: Data, label: String) throws -> [String: Any] {
+        guard
+            let src = CGImageSourceCreateWithData(png as CFData, nil),
+            let cg = CGImageSourceCreateImageAtIndex(src, 0, nil)
+        else {
+            throw NSError(domain: "ai-cpb", code: -10,
+                          userInfo: [NSLocalizedDescriptionKey: "Could not decode \(label) image."])
+        }
+        guard let (data, mediaType) = ScreenCapturer.encodeForAI(cg) else {
+            throw NSError(domain: "ai-cpb", code: -11,
+                          userInfo: [NSLocalizedDescriptionKey: "Could not encode \(label) image."])
+        }
+        return [
+            "type": "image",
+            "source": [
+                "type": "base64",
+                "media_type": mediaType,
+                "data": data.base64EncodedString()
+            ] as [String: Any]
+        ] as [String: Any]
     }
 }
