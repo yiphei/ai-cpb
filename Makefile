@@ -45,6 +45,7 @@ $(APP_BUNDLE): $(EXE) $(INFO_PLIST_SRC)
 	@echo "✓ Built $(APP_BUNDLE)"
 
 run: build
+	@pkill -x $(EXE_NAME) 2>/dev/null; true
 	@echo "→ Launching"
 	@open "$(APP_BUNDLE)"
 
