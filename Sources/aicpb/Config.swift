@@ -1,5 +1,11 @@
 import Foundation
 
+struct LangfuseConfig {
+    static let host = "https://us.cloud.langfuse.com"
+    let publicKey: String
+    let secretKey: String
+}
+
 final class Config {
     static let shared = Config()
 
@@ -11,14 +17,20 @@ final class Config {
     static let configFileURL: URL = configDirURL.appendingPathComponent("config.json")
 
     private(set) var apiKey: String?
+    private(set) var langfuse: LangfuseConfig?
 
     func load() {
         apiKey = nil
+        langfuse = nil
         guard let data = try? Data(contentsOf: Config.configFileURL),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let key = obj["anthropic_api_key"] as? String,
-              !key.isEmpty
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return }
-        apiKey = key
+        if let key = obj["anthropic_api_key"] as? String, !key.isEmpty {
+            apiKey = key
+        }
+        if let pk = obj["langfuse_public_key"] as? String, !pk.isEmpty,
+           let sk = obj["langfuse_secret_key"] as? String, !sk.isEmpty {
+            langfuse = LangfuseConfig(publicKey: pk, secretKey: sk)
+        }
     }
 }

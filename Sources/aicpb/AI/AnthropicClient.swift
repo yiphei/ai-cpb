@@ -21,6 +21,54 @@ struct AnthropicClient {
     let apiKey: String
 
     func paste(copyPng: Data, destPng: Data) async throws -> String {
+        let startTime = Date()
+        NSLog("ai-cpb: AnthropicClient.paste() start (lf configured=\(Config.shared.langfuse != nil))")
+        var responseText: String? = nil
+        var inputTokens: Int? = nil
+        var outputTokens: Int? = nil
+        var httpStatus: Int? = nil
+        var errorMessage: String? = nil
+
+        defer {
+            if let lf = Config.shared.langfuse {
+                LangfuseLogger.shared.log(
+                    LangfuseCallRecord(
+                        model: AnthropicClient.model,
+                        systemPrompt: AnthropicClient.systemPrompt,
+                        copyPng: copyPng,
+                        destPng: destPng,
+                        startTime: startTime,
+                        endTime: Date(),
+                        response: responseText,
+                        inputTokens: inputTokens,
+                        outputTokens: outputTokens,
+                        httpStatus: httpStatus,
+                        errorMessage: errorMessage
+                    ),
+                    config: lf
+                )
+            }
+        }
+
+        do {
+            let text: String
+            (text, inputTokens, outputTokens, httpStatus) =
+                try await sendRequest(copyPng: copyPng, destPng: destPng)
+            responseText = text
+            return text
+        } catch let err as NSError {
+            httpStatus = err.code > 0 ? err.code : httpStatus
+            errorMessage = err.localizedDescription
+            throw err
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
+    private func sendRequest(copyPng: Data, destPng: Data)
+        async throws -> (text: String, inputTokens: Int?, outputTokens: Int?, httpStatus: Int)
+    {
         var req = URLRequest(url: AnthropicClient.endpoint)
         req.httpMethod = "POST"
         req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
@@ -78,11 +126,14 @@ struct AnthropicClient {
                           userInfo: [NSLocalizedDescriptionKey: "Unexpected response shape."])
         }
 
-        // Find the first text block.
+        let usage = root["usage"] as? [String: Any]
+        let inT = usage?["input_tokens"] as? Int
+        let outT = usage?["output_tokens"] as? Int
+
         for block in content {
             if (block["type"] as? String) == "text",
                let text = block["text"] as? String {
-                return text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return (text.trimmingCharacters(in: .whitespacesAndNewlines), inT, outT, http.statusCode)
             }
         }
         throw NSError(domain: "ai-cpb", code: -3,
