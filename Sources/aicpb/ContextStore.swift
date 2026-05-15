@@ -7,16 +7,20 @@ struct CopyPayload {
 
 final class ContextStore {
     static let shared = ContextStore()
+    static let maxCopies = 10
 
-    private(set) var currentCopy: CopyPayload?
+    private(set) var copies: [CopyPayload] = []
 
-    func setCopy(_ payload: CopyPayload) {
-        currentCopy = payload
-        MenuBar.shared.setHasCopy(true)
+    func appendCopy(_ payload: CopyPayload) {
+        copies.append(payload)
+        if copies.count > Self.maxCopies {
+            copies.removeFirst(copies.count - Self.maxCopies)
+        }
+        MenuBar.shared.setCopyCount(copies.count)
     }
 
     func clear() {
-        currentCopy = nil
-        MenuBar.shared.setHasCopy(false)
+        copies.removeAll()
+        MenuBar.shared.setCopyCount(0)
     }
 }

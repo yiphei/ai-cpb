@@ -12,6 +12,8 @@ final class MenuBar {
     private var clearItem: NSMenuItem!
     private var configStatusItem: NSMenuItem!
     private var flashWorkItem: DispatchWorkItem?
+    private var currentStatus: String = "idle"
+    private var currentCopyCount: Int = 0
 
     func install() {
         NSLog("ai-cpb: MenuBar.install() entered")
@@ -83,14 +85,30 @@ final class MenuBar {
 
     func setStatus(_ text: String) {
         DispatchQueue.main.async { [weak self] in
-            self?.statusLabelItem?.title = "Status: \(text)"
+            guard let self else { return }
+            self.currentStatus = text
+            self.renderStatusLabel()
         }
     }
 
-    func setHasCopy(_ has: Bool) {
+    func setCopyCount(_ count: Int) {
         DispatchQueue.main.async { [weak self] in
-            self?.clearItem?.isEnabled = has
+            guard let self else { return }
+            self.currentCopyCount = count
+            self.clearItem?.isEnabled = count > 0
+            self.renderStatusLabel()
         }
+    }
+
+    private func renderStatusLabel() {
+        let base = "Status: \(currentStatus)"
+        let suffix: String
+        switch currentCopyCount {
+        case 0: suffix = ""
+        case 1: suffix = " (1 copy)"
+        default: suffix = " (\(currentCopyCount) copies)"
+        }
+        statusLabelItem?.title = base + suffix
     }
 
     func refreshConfigState() {
@@ -146,7 +164,6 @@ final class MenuBar {
 
     @objc private func clearCopy() {
         ContextStore.shared.clear()
-        setHasCopy(false)
     }
 
     @objc private func checkPermissions() {

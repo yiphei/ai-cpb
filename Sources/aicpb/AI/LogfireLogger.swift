@@ -4,7 +4,7 @@ import ImageIO
 struct LogfireCallRecord {
     let model: String
     let systemPrompt: String
-    let copyPng: Data
+    let copyPngs: [Data]
     let destPng: Data
     let startTime: Date
     let endTime: Date
@@ -32,18 +32,21 @@ final class LogfireLogger {
 
         let spanName = "Chat Completion with '\(r.model)'"
 
-        let copyDataUri = LogfireLogger.dataUriForLogging(r.copyPng)
+        var userContent: [[String: Any]] = []
+        for (idx, png) in r.copyPngs.enumerated() {
+            let uri = LogfireLogger.dataUriForLogging(png)
+            userContent.append(["type": "image_url", "image_url": ["url": uri]])
+            userContent.append(["type": "text", "text": "Image \(idx + 1) = copied content #\(idx + 1)."])
+        }
         let destDataUri = LogfireLogger.dataUriForLogging(r.destPng)
+        let destIndex = r.copyPngs.count + 1
+        userContent.append(["type": "image_url", "image_url": ["url": destDataUri]])
+        userContent.append(["type": "text", "text": "Image \(destIndex) = paste destination (red rectangle marks the target input field)."])
 
         let requestBody: [String: Any] = [
             "messages": [
                 ["role": "system", "content": r.systemPrompt],
-                ["role": "user", "content": [
-                    ["type": "image_url", "image_url": ["url": copyDataUri]],
-                    ["type": "text", "text": "Image 1 = copied content."],
-                    ["type": "image_url", "image_url": ["url": destDataUri]],
-                    ["type": "text", "text": "Image 2 = paste destination (red rectangle marks the target input field)."]
-                ]]
+                ["role": "user", "content": userContent]
             ],
             "model": r.model
         ]

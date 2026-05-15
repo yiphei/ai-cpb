@@ -11,9 +11,11 @@ struct OpenRouterClient {
         return """
         The current local datetime is \(nowString).
 
-        You are an AI paste assistant. The user has copied context (Image 1) and wants to paste relevant data into a destination text input on their screen (Image 2). The destination input field is marked with a bright red rectangle.
+        You are an AI paste assistant. The user has copied one or more contexts (Images 1..N) and wants to paste relevant data into a destination text input on their screen (the LAST image, Image N+1). The destination input field is marked with a bright red rectangle.
 
-        Your job is to intelligently decide a) what to paste, and b) in what format, based on both the copied context and the destination context. For example, what to paste can be (non-exhaustive list):
+        The copied contexts are independent snapshots — they may be related or unrelated. Consider all of them when deciding what to paste; pull from whichever copy (or combination of copies) best fits the destination field.
+
+        Your job is to intelligently decide a) what to paste, and b) in what format, based on both the copied context(s) and the destination context. For example, what to paste can be (non-exhaustive list):
         a) a substring of the copied context. E.g. if the copied context is approximately "My name is John Doe", and the destination context is a form and the input field is "Name", the pasted context can be "John Doe"
         b) a transformed text of the copied context. E.g. if the copied context is "I am allergic to onions and also garlic. Oh dont forget tomatoes as well", and the destination context is restaurant reservation and input field is "allergies", the pasted content can be "garlic, onion, and tomato"
         c) a computed value based on the copied context and the destination context. E.g. if the copied context is "i was born in 1998", and the destination context is a form and the input field is "age" and today is 2026, the pasted content can be "28"
@@ -28,7 +30,7 @@ struct OpenRouterClient {
 
     let apiKey: String
 
-    func paste(copyPng: Data, destPng: Data) async throws -> String {
+    func paste(copyPngs: [Data], destPng: Data) async throws -> String {
         let startTime = Date()
         let systemPrompt = OpenRouterClient.systemPrompt(now: startTime)
         NSLog("ai-cpb: OpenRouterClient.paste() start (logfire configured=\(Config.shared.logfire != nil))")
@@ -44,7 +46,7 @@ struct OpenRouterClient {
                     LogfireCallRecord(
                         model: OpenRouterClient.model,
                         systemPrompt: systemPrompt,
-                        copyPng: copyPng,
+                        copyPngs: copyPngs,
                         destPng: destPng,
                         startTime: startTime,
                         endTime: Date(),
@@ -62,7 +64,7 @@ struct OpenRouterClient {
         do {
             let text: String
             (text, inputTokens, outputTokens, httpStatus) =
-                try await sendRequest(systemPrompt: systemPrompt, copyPng: copyPng, destPng: destPng)
+                try await sendRequest(systemPrompt: systemPrompt, copyPngs: copyPngs, destPng: destPng)
             responseText = text
             return text
         } catch let err as NSError {
@@ -75,7 +77,7 @@ struct OpenRouterClient {
         }
     }
 
-    private func sendRequest(systemPrompt: String, copyPng: Data, destPng: Data)
+    private func sendRequest(systemPrompt: String, copyPngs: [Data], destPng: Data)
         async throws -> (text: String, inputTokens: Int?, outputTokens: Int?, httpStatus: Int)
     {
         var req = URLRequest(url: OpenRouterClient.endpoint)
@@ -86,15 +88,16 @@ struct OpenRouterClient {
         req.setValue("ai-cpb", forHTTPHeaderField: "X-Title")
         req.timeoutInterval = 25
 
-        let copyDataUri = "data:image/png;base64,\(copyPng.base64EncodedString())"
+        var userContent: [[String: Any]] = []
+        for (idx, png) in copyPngs.enumerated() {
+            let uri = "data:image/png;base64,\(png.base64EncodedString())"
+            userContent.append(["type": "image_url", "image_url": ["url": uri] as [String: Any]] as [String: Any])
+            userContent.append(["type": "text", "text": "Image \(idx + 1) = copied content #\(idx + 1)."])
+        }
         let destDataUri = "data:image/png;base64,\(destPng.base64EncodedString())"
-
-        let userContent: [[String: Any]] = [
-            ["type": "image_url", "image_url": ["url": copyDataUri] as [String: Any]] as [String: Any],
-            ["type": "text", "text": "Image 1 = copied content."],
-            ["type": "image_url", "image_url": ["url": destDataUri] as [String: Any]] as [String: Any],
-            ["type": "text", "text": "Image 2 = paste destination (red rectangle marks the target input field)."]
-        ]
+        let destIndex = copyPngs.count + 1
+        userContent.append(["type": "image_url", "image_url": ["url": destDataUri] as [String: Any]] as [String: Any])
+        userContent.append(["type": "text", "text": "Image \(destIndex) = paste destination (red rectangle marks the target input field)."])
 
         let body: [String: Any] = [
             "model": OpenRouterClient.model,
