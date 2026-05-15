@@ -1,0 +1,8 @@
+[mcp_servers.langfuse]
+url = "https://us.cloud.langfuse.com/api/public/mcp"
+
+[mcp_servers.langfuse.http_headers]
+Authorization = "Basic cGstbGYtOWRmNzU1ZDEtOWZkNy00YTkwLTg4ODYtOWYwMGFiZTBmNmEwOnNrLWxmLWU5YzY2NGZlLTQ3YWMtNDlkMy05NTQ2LTRmOTRjZmE2ZmZmNQ=="
+
+[mcp_servers.logfire]
+url = "https://logfire-us.pydantic.dev/mcp"
