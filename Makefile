@@ -9,7 +9,8 @@ INFO_PLIST_SRC := Resources/Info.plist
 EXE := $(BUILD_DIR)/$(EXE_NAME)
 DMG := $(BUILD_DIR)/$(APP_NAME).dmg
 
-SOURCES := $(shell find Sources/aicpb -name '*.swift')
+SOURCES := $(shell find Sources/aicpb -name '*.swift' -not -name 'LogfireToken.swift')
+LOGFIRE_GEN := Sources/aicpb/LogfireToken.swift
 
 # Build straight with swiftc — SwiftPM under CLT-only has a SwiftVersion typealias
 # mismatch with the bundled PackageDescription dylib, so we skip it.
@@ -18,16 +19,28 @@ SWIFTC_FLAGS := -O \
 	-framework AppKit \
 	-framework ApplicationServices \
 	-framework Carbon \
-	-framework CoreGraphics
+	-framework CoreGraphics \
+	-framework Security \
+	-framework SwiftUI
 
-.PHONY: build run clean install reinstall dmg
+.PHONY: build run clean install reinstall dmg logfire-token-gen
 
 build: $(APP_BUNDLE)
 
-$(EXE): $(SOURCES)
+logfire-token-gen:
+	@mkdir -p Sources/aicpb
+	@if [ -n "$$AICPB_LOGFIRE_TOKEN" ]; then \
+		printf 'enum LogfireBuild { static let token: String? = "%s" }\n' "$$AICPB_LOGFIRE_TOKEN" > $(LOGFIRE_GEN); \
+		echo "→ Logfire token embedded for this build"; \
+	else \
+		echo 'enum LogfireBuild { static let token: String? = nil }' > $(LOGFIRE_GEN); \
+		echo "→ Logfire token absent — Config.shared.logfire will be nil"; \
+	fi
+
+$(EXE): $(SOURCES) logfire-token-gen
 	@mkdir -p "$(BUILD_DIR)"
 	@echo "→ Compiling Swift sources"
-	@swiftc $(SWIFTC_FLAGS) $(SOURCES) -o "$(EXE)"
+	@swiftc $(SWIFTC_FLAGS) $(SOURCES) $(LOGFIRE_GEN) -o "$(EXE)"
 
 $(APP_BUNDLE): $(EXE) $(INFO_PLIST_SRC)
 	@echo "→ Assembling $(APP_BUNDLE)"
@@ -60,7 +73,9 @@ reinstall: install
 	@pkill -x $(EXE_NAME) 2>/dev/null; true
 	@open "/Applications/$(APP_NAME).app"
 
-dmg: $(APP_BUNDLE)
+dmg:
+	@echo "→ DMG build: stripping AICPB_LOGFIRE_TOKEN for this build"
+	@AICPB_LOGFIRE_TOKEN= $(MAKE) $(APP_BUNDLE)
 	@echo "→ Staging DMG contents"
 	@rm -rf "$(BUILD_DIR)/dmg-staging" "$(DMG)"
 	@mkdir -p "$(BUILD_DIR)/dmg-staging"

@@ -8,6 +8,8 @@ struct LogfireConfig {
 final class Config {
     static let shared = Config()
 
+    static let didChangeNotification = Notification.Name("aicpb.Config.didChange")
+
     static let configDirURL: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(".config/ai-cpb", isDirectory: true)
@@ -16,19 +18,79 @@ final class Config {
     static let configFileURL: URL = configDirURL.appendingPathComponent("config.json")
 
     private(set) var apiKey: String?
-    private(set) var logfire: LogfireConfig?
+
+    let logfire: LogfireConfig?
+
+    private init() {
+        if let t = LogfireBuild.token, !t.isEmpty {
+            self.logfire = LogfireConfig(writeToken: t)
+        } else {
+            self.logfire = nil
+        }
+    }
 
     func load() {
         apiKey = nil
-        logfire = nil
-        guard let data = try? Data(contentsOf: Config.configFileURL),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return }
-        if let key = obj["openrouter_api_key"] as? String, !key.isEmpty {
-            apiKey = key
+
+        if let stored = Keychain.readString(account: Keychain.openRouterAccount),
+           !stored.isEmpty {
+            apiKey = stored
         }
-        if let token = obj["logfire_write_token"] as? String, !token.isEmpty {
-            logfire = LogfireConfig(writeToken: token)
+
+        guard let data = try? Data(contentsOf: Config.configFileURL),
+              var jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return }
+
+        if apiKey == nil,
+           let legacy = (jsonObject["openrouter_api_key"] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+           !legacy.isEmpty {
+            do {
+                try Keychain.writeString(legacy, account: Keychain.openRouterAccount)
+                apiKey = legacy
+                NSLog("ai-cpb: migrated legacy api key from config.json into Keychain")
+            } catch {
+                NSLog("ai-cpb: legacy api key migration FAILED: \(error)")
+            }
+        }
+
+        let hadLegacy =
+            jsonObject["openrouter_api_key"] != nil ||
+            jsonObject["logfire_write_token"] != nil
+        jsonObject.removeValue(forKey: "openrouter_api_key")
+        jsonObject.removeValue(forKey: "logfire_write_token")
+        if hadLegacy {
+            Self.writeJSON(jsonObject)
+        }
+    }
+
+    @discardableResult
+    func setAPIKey(_ key: String?) -> Result<Void, Error> {
+        let trimmed = key?.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            if let v = trimmed, !v.isEmpty {
+                try Keychain.writeString(v, account: Keychain.openRouterAccount)
+                apiKey = v
+            } else {
+                try Keychain.delete(account: Keychain.openRouterAccount)
+                apiKey = nil
+            }
+        } catch {
+            return .failure(error)
+        }
+        NotificationCenter.default.post(name: Config.didChangeNotification, object: nil)
+        return .success(())
+    }
+
+    private static func writeJSON(_ obj: [String: Any]) {
+        do {
+            try FileManager.default.createDirectory(
+                at: Config.configDirURL, withIntermediateDirectories: true)
+            let data = try JSONSerialization.data(
+                withJSONObject: obj, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: Config.configFileURL, options: .atomic)
+        } catch {
+            NSLog("ai-cpb: failed to rewrite config.json: \(error)")
         }
     }
 }
