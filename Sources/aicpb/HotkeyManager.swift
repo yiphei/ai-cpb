@@ -2,6 +2,8 @@ import AppKit
 import Carbon.HIToolbox
 
 final class HotkeyManager {
+    static let shared = HotkeyManager()
+
     enum HotkeyID: UInt32 { case copy = 1, paste = 2 }
 
     var onCopy: (() -> Void)?
@@ -10,6 +12,7 @@ final class HotkeyManager {
     private var copyRef: EventHotKeyRef?
     private var pasteRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
+    private var suspendCount = 0
 
     func install() {
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
@@ -53,10 +56,29 @@ final class HotkeyManager {
     }
 
     func applyCurrentHotkeys() {
-        if let r = copyRef { UnregisterEventHotKey(r); copyRef = nil }
-        if let r = pasteRef { UnregisterEventHotKey(r); pasteRef = nil }
+        unregisterAll()
+        guard suspendCount == 0 else { return }
         copyRef  = register(combo: Config.shared.copyHotkey,  id: .copy)
         pasteRef = register(combo: Config.shared.pasteHotkey, id: .paste)
+    }
+
+    /// Temporarily unregister the global hotkeys. Re-entrant: each `suspend()`
+    /// must be paired with a `resume()`. Used by the Settings key recorder so
+    /// pressing the currently-bound combo doesn't fire AI Copy/Paste.
+    func suspend() {
+        suspendCount += 1
+        if suspendCount == 1 { unregisterAll() }
+    }
+
+    func resume() {
+        guard suspendCount > 0 else { return }
+        suspendCount -= 1
+        if suspendCount == 0 { applyCurrentHotkeys() }
+    }
+
+    private func unregisterAll() {
+        if let r = copyRef  { UnregisterEventHotKey(r); copyRef  = nil }
+        if let r = pasteRef { UnregisterEventHotKey(r); pasteRef = nil }
     }
 
     private func register(combo: HotkeyCombo, id: HotkeyID) -> EventHotKeyRef? {

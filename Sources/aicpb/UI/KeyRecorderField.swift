@@ -23,8 +23,22 @@ final class KeyRecorderNSView: NSView {
     var combo: HotkeyCombo = .defaultCopy { didSet { refresh() } }
     var onChange: ((HotkeyCombo) -> Void)?
 
-    private var recording = false { didSet { refresh() } }
+    private var recording = false {
+        didSet {
+            guard recording != oldValue else { return }
+            if recording {
+                HotkeyManager.shared.suspend()
+            } else {
+                HotkeyManager.shared.resume()
+            }
+            refresh()
+        }
+    }
     private let label = NSTextField(labelWithString: "")
+
+    deinit {
+        if recording { HotkeyManager.shared.resume() }
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)

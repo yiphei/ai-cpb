@@ -1,7 +1,7 @@
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let hotkeys = HotkeyManager()
+    private let hotkeys = HotkeyManager.shared
     private let menuBar = MenuBar.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
