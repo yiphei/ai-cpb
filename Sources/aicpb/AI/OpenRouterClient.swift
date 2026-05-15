@@ -35,6 +35,7 @@ struct OpenRouterClient {
         let systemPrompt = OpenRouterClient.systemPrompt(now: startTime)
         NSLog("ai-cpb: OpenRouterClient.paste() start (logfire configured=\(Config.shared.logfire != nil))")
         var responseText: String? = nil
+        var reasoningText: String? = nil
         var inputTokens: Int? = nil
         var outputTokens: Int? = nil
         var httpStatus: Int? = nil
@@ -51,6 +52,7 @@ struct OpenRouterClient {
                         startTime: startTime,
                         endTime: Date(),
                         response: responseText,
+                        reasoning: reasoningText,
                         inputTokens: inputTokens,
                         outputTokens: outputTokens,
                         httpStatus: httpStatus,
@@ -63,7 +65,7 @@ struct OpenRouterClient {
 
         do {
             let text: String
-            (text, inputTokens, outputTokens, httpStatus) =
+            (text, reasoningText, inputTokens, outputTokens, httpStatus) =
                 try await sendRequest(systemPrompt: systemPrompt, copyPngs: copyPngs, destPng: destPng)
             responseText = text
             return text
@@ -78,7 +80,7 @@ struct OpenRouterClient {
     }
 
     private func sendRequest(systemPrompt: String, copyPngs: [Data], destPng: Data)
-        async throws -> (text: String, inputTokens: Int?, outputTokens: Int?, httpStatus: Int)
+        async throws -> (text: String, reasoning: String?, inputTokens: Int?, outputTokens: Int?, httpStatus: Int)
     {
         var req = URLRequest(url: OpenRouterClient.endpoint)
         req.httpMethod = "POST"
@@ -86,7 +88,7 @@ struct OpenRouterClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("https://github.com/yiphei/ai-cpb", forHTTPHeaderField: "HTTP-Referer")
         req.setValue("ai-cpb", forHTTPHeaderField: "X-Title")
-        req.timeoutInterval = 25
+        req.timeoutInterval = 60
 
         var userContent: [[String: Any]] = []
         for (idx, png) in copyPngs.enumerated() {
@@ -101,7 +103,8 @@ struct OpenRouterClient {
 
         let body: [String: Any] = [
             "model": OpenRouterClient.model,
-            "max_tokens": 1024,
+            "max_tokens": 8192,
+            "reasoning": ["enabled": true],
             "messages": [
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": userContent]
@@ -132,10 +135,21 @@ struct OpenRouterClient {
                           userInfo: [NSLocalizedDescriptionKey: "Unexpected response shape."])
         }
 
+        let reasoning: String? = {
+            if let s = message["reasoning"] as? String, !s.isEmpty { return s }
+            if let details = message["reasoning_details"] as? [[String: Any]] {
+                let parts = details.compactMap {
+                    ($0["text"] as? String) ?? ($0["data"] as? String) ?? ($0["summary"] as? String)
+                }
+                return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
+            }
+            return nil
+        }()
+
         let usage = root["usage"] as? [String: Any]
         let inT = usage?["prompt_tokens"] as? Int
         let outT = usage?["completion_tokens"] as? Int
 
-        return (text.trimmingCharacters(in: .whitespacesAndNewlines), inT, outT, http.statusCode)
+        return (text.trimmingCharacters(in: .whitespacesAndNewlines), reasoning, inT, outT, http.statusCode)
     }
 }

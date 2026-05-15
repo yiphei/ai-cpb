@@ -9,6 +9,7 @@ struct LogfireCallRecord {
     let startTime: Date
     let endTime: Date
     let response: String?
+    let reasoning: String?
     let inputTokens: Int?
     let outputTokens: Int?
     let httpStatus: Int?
@@ -54,8 +55,12 @@ final class LogfireLogger {
 
         var responseDataString: String? = nil
         if let response = r.response {
+            var assistantMessage: [String: Any] = ["role": "assistant", "content": response]
+            if let reasoning = r.reasoning {
+                assistantMessage["reasoning"] = reasoning
+            }
             var responseBody: [String: Any] = [
-                "message": ["role": "assistant", "content": response]
+                "message": assistantMessage
             ]
             if let inT = r.inputTokens, let outT = r.outputTokens {
                 responseBody["usage"] = [
