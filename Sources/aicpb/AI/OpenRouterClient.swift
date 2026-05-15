@@ -20,7 +20,7 @@ struct OpenRouterClient {
 
         To do this job effectivelly, you need to examine very carefully everything in the copied context and the destination context. For instance, look at labels, placeholder text, and surrounding UI.
 
-        Output ONLY the exact text to paste.
+        Output ONLY the exact text to paste. You must exclude any internal work like calculations, reasoning, etc. from the output.
 
         If you genuinely cannot determine what to paste, output exactly: <<NO_PASTE>>
         """
