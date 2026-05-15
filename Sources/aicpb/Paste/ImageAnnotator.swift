@@ -38,12 +38,7 @@ enum ImageAnnotator {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return image }
 
-        // CGContext is bottom-left-origin. Draw the source image flipped so it appears upright.
-        ctx.saveGState()
-        ctx.translateBy(x: 0, y: CGFloat(height))
-        ctx.scaleBy(x: 1, y: -1)
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
-        ctx.restoreGState()
 
         // Convert pxRectTopLeft (top-left origin) to CGContext bottom-left origin for stroking.
         let pxRectBL = CGRect(
