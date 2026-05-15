@@ -94,7 +94,7 @@ final class CopyModeController: LassoViewDelegate {
                 MenuBar.shared.flash(.idle)
                 return
             }
-            ContextStore.shared.setCopy(CopyPayload(imagePng: png, capturedAt: Date()))
+            ContextStore.shared.appendCopy(CopyPayload(imagePng: png, capturedAt: Date()))
             MenuBar.shared.flash(.copied)
         }
     }

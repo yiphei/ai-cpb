@@ -10,7 +10,8 @@ final class PasteController {
         inFlight = true
         defer { inFlight = false }
 
-        guard let payload = ContextStore.shared.currentCopy else {
+        let copies = ContextStore.shared.copies
+        guard !copies.isEmpty else {
             Notify.error("No AI-copied content yet",
                          "Press ⌘⇧C and lasso some content first, then try paste again.")
             return
@@ -59,7 +60,7 @@ final class PasteController {
         let text: String
         do {
             text = try await OpenRouterClient(apiKey: apiKey)
-                .paste(copyPng: payload.imagePng, destPng: destPng)
+                .paste(copyPngs: copies.map(\.imagePng), destPng: destPng)
         } catch {
             await PasteIndicator.shared.hide()
             Notify.error("AI call failed", error.localizedDescription)
