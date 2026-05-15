@@ -27,7 +27,6 @@ private struct SettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .labelsHidden()
             .onChange(of: selectedProvider) { _, new in
                 keyText = (new == Config.shared.provider) ? (Config.shared.apiKey ?? "") : ""
             }
