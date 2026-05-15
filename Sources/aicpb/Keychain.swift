@@ -5,6 +5,7 @@ enum Keychain {
     static let service = "com.yanyiphei.aicpb"
 
     static let openRouterAccount = "openrouter_api_key"
+    static let anthropicAccount  = "anthropic_api_key"
 
     enum KeychainError: Error {
         case unexpectedStatus(OSStatus)

@@ -2,6 +2,7 @@ import Foundation
 import ImageIO
 
 struct LogfireCallRecord {
+    let system: String
     let model: String
     let systemPrompt: String
     let copyPngs: [Data]
@@ -73,7 +74,7 @@ final class LogfireLogger {
         }
 
         var attributes: [[String: Any]] = [
-            otlpAttr("gen_ai.system", string: "openai"),
+            otlpAttr("gen_ai.system", string: r.system),
             otlpAttr("gen_ai.request.model", string: r.model),
             otlpAttr("gen_ai.response.model", string: r.model),
             otlpAttr("request_data", string: requestDataString),

@@ -17,9 +17,10 @@ final class PasteController {
             return
         }
 
+        let provider = Config.shared.provider
         guard let apiKey = Config.shared.apiKey else {
             Notify.error("API key missing",
-                         "Add your OpenRouter API key (openrouter_api_key) to ~/.config/ai-cpb/config.json and relaunch.")
+                         "Add your \(provider.displayName) API key in Settings (⌘,) and try again.")
             return
         }
 
@@ -57,10 +58,16 @@ final class PasteController {
         // HUD never lands in the destination image we send to the model.
         await PasteIndicator.shared.show(near: focused?.rect, on: destScreen)
 
+        let client: LLMClient = {
+            switch provider {
+            case .openRouter: return OpenRouterClient(apiKey: apiKey)
+            case .anthropic:  return AnthropicClient(apiKey: apiKey)
+            }
+        }()
+
         let text: String
         do {
-            text = try await OpenRouterClient(apiKey: apiKey)
-                .paste(copyPngs: copies.map(\.imagePng), destPng: destPng)
+            text = try await client.paste(copyPngs: copies.map(\.imagePng), destPng: destPng)
         } catch {
             await PasteIndicator.shared.hide()
             Notify.error("AI call failed", error.localizedDescription)

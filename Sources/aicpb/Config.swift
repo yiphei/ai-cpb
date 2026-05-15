@@ -18,6 +18,9 @@ final class Config {
 
     static let configFileURL: URL = configDirURL.appendingPathComponent("config.json")
 
+    static let providerDefaultsKey = "aicpb.provider"
+
+    private(set) var provider: LLMProvider = .openRouter
     private(set) var apiKey: String?
     private(set) var copyHotkey: HotkeyCombo = .defaultCopy
     private(set) var pasteHotkey: HotkeyCombo = .defaultPaste
@@ -33,14 +36,13 @@ final class Config {
     }
 
     func load() {
-        apiKey = nil
         copyHotkey = .defaultCopy
         pasteHotkey = .defaultPaste
+        provider = UserDefaults.standard.string(forKey: Config.providerDefaultsKey)
+            .flatMap(LLMProvider.init(rawValue:)) ?? .openRouter
 
-        if let stored = Keychain.readString(account: Keychain.openRouterAccount),
-           !stored.isEmpty {
-            apiKey = stored
-        }
+        apiKey = Keychain.readString(account: provider.keychainAccount)
+            .flatMap { $0.isEmpty ? nil : $0 }
 
         guard let data = try? Data(contentsOf: Config.configFileURL),
               var jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -55,7 +57,7 @@ final class Config {
             pasteHotkey = combo
         }
 
-        if apiKey == nil,
+        if provider == .openRouter, apiKey == nil,
            let legacy = (jsonObject["openrouter_api_key"] as? String)?
                 .trimmingCharacters(in: .whitespacesAndNewlines),
            !legacy.isEmpty {
@@ -79,16 +81,21 @@ final class Config {
     }
 
     @discardableResult
-    func setAPIKey(_ key: String?) -> Result<Void, Error> {
+    func setAPIKey(_ key: String?, for newProvider: LLMProvider) -> Result<Void, Error> {
         let trimmed = key?.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
+            for p in LLMProvider.allCases where p != newProvider {
+                try Keychain.delete(account: p.keychainAccount)
+            }
             if let v = trimmed, !v.isEmpty {
-                try Keychain.writeString(v, account: Keychain.openRouterAccount)
+                try Keychain.writeString(v, account: newProvider.keychainAccount)
                 apiKey = v
             } else {
-                try Keychain.delete(account: Keychain.openRouterAccount)
+                try Keychain.delete(account: newProvider.keychainAccount)
                 apiKey = nil
             }
+            provider = newProvider
+            UserDefaults.standard.set(newProvider.rawValue, forKey: Config.providerDefaultsKey)
         } catch {
             return .failure(error)
         }
