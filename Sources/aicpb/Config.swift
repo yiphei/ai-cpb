@@ -25,7 +25,7 @@ final class Config {
         guard let data = try? Data(contentsOf: Config.configFileURL),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return }
-        if let key = obj["anthropic_api_key"] as? String, !key.isEmpty {
+        if let key = obj["openrouter_api_key"] as? String, !key.isEmpty {
             apiKey = key
         }
         if let pk = obj["langfuse_public_key"] as? String, !pk.isEmpty,
