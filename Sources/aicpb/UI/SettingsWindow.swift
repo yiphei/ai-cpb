@@ -1,0 +1,127 @@
+import AppKit
+import SwiftUI
+
+private struct SettingsView: View {
+    let firstRun: Bool
+    let onRequestClose: () -> Void
+
+    @State private var keyText: String = Config.shared.apiKey ?? ""
+    @State private var statusMessage: String? = nil
+    @State private var statusIsError: Bool = false
+    @State private var statusClearWorkItem: DispatchWorkItem? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if firstRun {
+                Text("Welcome to AI-CPB")
+                    .font(.title2).bold()
+                Text("Paste your OpenRouter API key to get started. AI-CPB uses it to decide what to paste based on what you copied.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("OpenRouter API key")
+                    .font(.headline)
+            }
+
+            SecureField("sk-or-...", text: $keyText)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { save() }
+
+            HStack(spacing: 12) {
+                Link("Get a key at openrouter.ai/keys",
+                     destination: URL(string: "https://openrouter.ai/keys")!)
+                    .font(.callout)
+                Spacer()
+                if let msg = statusMessage {
+                    Text(msg)
+                        .font(.callout)
+                        .foregroundStyle(statusIsError ? .red : .green)
+                }
+            }
+
+            HStack {
+                Button("Clear key", role: .destructive, action: clear)
+                    .disabled(Config.shared.apiKey == nil && keyText.isEmpty)
+                Spacer()
+                Button("Cancel", action: onRequestClose)
+                    .keyboardShortcut(.cancelAction)
+                Button("Save", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(trimmedKey.isEmpty || trimmedKey == (Config.shared.apiKey ?? ""))
+            }
+        }
+        .padding(20)
+        .frame(width: 480)
+    }
+
+    private var trimmedKey: String {
+        keyText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func save() {
+        let result = Config.shared.setAPIKey(trimmedKey)
+        switch result {
+        case .success:
+            if firstRun {
+                onRequestClose()
+                return
+            }
+            show(status: "Saved ✓", isError: false)
+        case .failure(let err):
+            show(status: "Could not save: \(err.localizedDescription)", isError: true)
+        }
+    }
+
+    private func clear() {
+        let result = Config.shared.setAPIKey(nil)
+        switch result {
+        case .success:
+            keyText = ""
+            show(status: "Key removed", isError: false)
+        case .failure(let err):
+            show(status: "Could not clear: \(err.localizedDescription)", isError: true)
+        }
+    }
+
+    private func show(status: String, isError: Bool) {
+        statusMessage = status
+        statusIsError = isError
+        statusClearWorkItem?.cancel()
+        let work = DispatchWorkItem { statusMessage = nil }
+        statusClearWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: work)
+    }
+}
+
+final class SettingsWindowController: NSObject, NSWindowDelegate {
+    static let shared = SettingsWindowController()
+
+    private var window: NSWindow?
+    private var firstRun = false
+
+    func show(firstRun: Bool = false) {
+        self.firstRun = firstRun
+        if let w = window {
+            w.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let view = SettingsView(firstRun: firstRun, onRequestClose: { [weak self] in
+            self?.window?.performClose(nil)
+        })
+        let hosting = NSHostingController(rootView: view)
+        let win = NSWindow(contentViewController: hosting)
+        win.title = "AI-CPB Settings"
+        win.styleMask = [.titled, .closable, .miniaturizable]
+        win.isReleasedWhenClosed = false
+        win.center()
+        win.delegate = self
+        window = win
+        win.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        window = nil
+    }
+}

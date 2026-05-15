@@ -12,3 +12,4 @@ profile_output/
 .claude/worktrees/
 .claude/scheduled_tasks.lock
 build/
+Sources/aicpb/LogfireToken.swift

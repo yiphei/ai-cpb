@@ -47,8 +47,12 @@ final class MenuBar {
         statusLabelItem.isEnabled = false
         menu.addItem(statusLabelItem)
 
-        configStatusItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        configStatusItem.isEnabled = false
+        configStatusItem = NSMenuItem(
+            title: "",
+            action: #selector(openSettings),
+            keyEquivalent: ""
+        )
+        configStatusItem.target = self
         configStatusItem.isHidden = true
         menu.addItem(configStatusItem)
 
@@ -67,13 +71,16 @@ final class MenuBar {
         checkPerms.target = self
         menu.addItem(checkPerms)
 
-        let revealConfig = NSMenuItem(title: "Reveal config file",
-                                      action: #selector(revealConfig),
-                                      keyEquivalent: "")
-        revealConfig.target = self
-        menu.addItem(revealConfig)
-
         menu.addItem(.separator())
+
+        let settings = NSMenuItem(
+            title: "Settings…",
+            action: #selector(openSettings),
+            keyEquivalent: ","
+        )
+        settings.keyEquivalentModifierMask = [.command]
+        settings.target = self
+        menu.addItem(settings)
 
         let quit = NSMenuItem(title: "Quit ai-cpb",
                               action: #selector(NSApplication.terminate(_:)),
@@ -115,7 +122,7 @@ final class MenuBar {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             if Config.shared.apiKey == nil {
-                self.configStatusItem.title = "⚠️ API key missing — edit ~/.config/ai-cpb/config.json"
+                self.configStatusItem.title = "⚠️ API key missing — Open Settings…"
                 self.configStatusItem.isHidden = false
             } else {
                 self.configStatusItem.isHidden = true
@@ -170,19 +177,7 @@ final class MenuBar {
         Permissions.checkAll(promptIfMissing: true, reportToUser: true)
     }
 
-    @objc private func revealConfig() {
-        let dir = Config.configDirURL
-        let file = Config.configFileURL
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        if !FileManager.default.fileExists(atPath: file.path) {
-            let template = """
-            {
-                "openrouter_api_key": "",
-                "logfire_write_token": ""
-            }
-            """
-            try? template.write(to: file, atomically: true, encoding: .utf8)
-        }
-        NSWorkspace.shared.activateFileViewerSelecting([file])
+    @objc private func openSettings() {
+        SettingsWindowController.shared.show(firstRun: false)
     }
 }
