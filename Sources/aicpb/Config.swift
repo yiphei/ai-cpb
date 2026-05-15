@@ -9,6 +9,7 @@ final class Config {
     static let shared = Config()
 
     static let didChangeNotification = Notification.Name("aicpb.Config.didChange")
+    static let hotkeysDidChangeNotification = Notification.Name("aicpb.Config.hotkeysDidChange")
 
     static let configDirURL: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -18,6 +19,8 @@ final class Config {
     static let configFileURL: URL = configDirURL.appendingPathComponent("config.json")
 
     private(set) var apiKey: String?
+    private(set) var copyHotkey: HotkeyCombo = .defaultCopy
+    private(set) var pasteHotkey: HotkeyCombo = .defaultPaste
 
     let logfire: LogfireConfig?
 
@@ -31,6 +34,8 @@ final class Config {
 
     func load() {
         apiKey = nil
+        copyHotkey = .defaultCopy
+        pasteHotkey = .defaultPaste
 
         if let stored = Keychain.readString(account: Keychain.openRouterAccount),
            !stored.isEmpty {
@@ -40,6 +45,15 @@ final class Config {
         guard let data = try? Data(contentsOf: Config.configFileURL),
               var jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return }
+
+        if let dict = jsonObject["copy_hotkey"] as? [String: Any],
+           let combo = HotkeyCombo(jsonDict: dict) {
+            copyHotkey = combo
+        }
+        if let dict = jsonObject["paste_hotkey"] as? [String: Any],
+           let combo = HotkeyCombo(jsonDict: dict) {
+            pasteHotkey = combo
+        }
 
         if apiKey == nil,
            let legacy = (jsonObject["openrouter_api_key"] as? String)?
@@ -80,6 +94,31 @@ final class Config {
         }
         NotificationCenter.default.post(name: Config.didChangeNotification, object: nil)
         return .success(())
+    }
+
+    func setCopyHotkey(_ combo: HotkeyCombo) {
+        guard combo != copyHotkey else { return }
+        copyHotkey = combo
+        persistHotkeys()
+        NotificationCenter.default.post(name: Config.hotkeysDidChangeNotification, object: nil)
+    }
+
+    func setPasteHotkey(_ combo: HotkeyCombo) {
+        guard combo != pasteHotkey else { return }
+        pasteHotkey = combo
+        persistHotkeys()
+        NotificationCenter.default.post(name: Config.hotkeysDidChangeNotification, object: nil)
+    }
+
+    private func persistHotkeys() {
+        var dict: [String: Any] = [:]
+        if let data = try? Data(contentsOf: Config.configFileURL),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            dict = existing
+        }
+        dict["copy_hotkey"] = copyHotkey.jsonDict
+        dict["paste_hotkey"] = pasteHotkey.jsonDict
+        Self.writeJSON(dict)
     }
 
     private static func writeJSON(_ obj: [String: Any]) {

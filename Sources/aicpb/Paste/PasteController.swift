@@ -13,7 +13,7 @@ final class PasteController {
         let copies = ContextStore.shared.copies
         guard !copies.isEmpty else {
             Notify.error("No AI-copied content yet",
-                         "Press ⌘⇧C and lasso some content first, then try paste again.")
+                         "Press \(Config.shared.copyHotkey.displayString) and lasso some content first, then try paste again.")
             return
         }
 

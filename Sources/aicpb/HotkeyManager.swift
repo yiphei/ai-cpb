@@ -7,7 +7,8 @@ final class HotkeyManager {
     var onCopy: (() -> Void)?
     var onPaste: (() -> Void)?
 
-    private var refs: [EventHotKeyRef?] = []
+    private var copyRef: EventHotKeyRef?
+    private var pasteRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
 
     func install() {
@@ -40,24 +41,39 @@ final class HotkeyManager {
             &handlerRef
         )
 
-        register(keyCode: UInt32(kVK_ANSI_C), id: .copy)
-        register(keyCode: UInt32(kVK_ANSI_V), id: .paste)
+        applyCurrentHotkeys()
+
+        NotificationCenter.default.addObserver(
+            forName: Config.hotkeysDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyCurrentHotkeys()
+        }
     }
 
-    private func register(keyCode: UInt32, id: HotkeyID) {
+    func applyCurrentHotkeys() {
+        if let r = copyRef { UnregisterEventHotKey(r); copyRef = nil }
+        if let r = pasteRef { UnregisterEventHotKey(r); pasteRef = nil }
+        copyRef  = register(combo: Config.shared.copyHotkey,  id: .copy)
+        pasteRef = register(combo: Config.shared.pasteHotkey, id: .paste)
+    }
+
+    private func register(combo: HotkeyCombo, id: HotkeyID) -> EventHotKeyRef? {
         var ref: EventHotKeyRef?
         let hkID = EventHotKeyID(signature: 0x41494350 /* 'AICP' */, id: id.rawValue)
         let status = RegisterEventHotKey(
-            keyCode,
-            UInt32(cmdKey | shiftKey),
+            combo.keyCode,
+            combo.carbonModifiers,
             hkID,
             GetApplicationEventTarget(),
             0,
             &ref
         )
         if status != noErr {
-            NSLog("ai-cpb: failed to register hotkey id=\(id.rawValue) status=\(status)")
+            NSLog("ai-cpb: failed to register hotkey id=\(id.rawValue) combo=\(combo.displayString) status=\(status)")
+            return nil
         }
-        refs.append(ref)
+        return ref
     }
 }

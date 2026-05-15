@@ -6,6 +6,8 @@ private struct SettingsView: View {
     let onRequestClose: () -> Void
 
     @State private var keyText: String = Config.shared.apiKey ?? ""
+    @State private var copyCombo: HotkeyCombo = Config.shared.copyHotkey
+    @State private var pasteCombo: HotkeyCombo = Config.shared.pasteHotkey
     @State private var statusMessage: String? = nil
     @State private var statusIsError: Bool = false
     @State private var statusClearWorkItem: DispatchWorkItem? = nil
@@ -39,6 +41,24 @@ private struct SettingsView: View {
                 }
             }
 
+            Divider()
+
+            Text("Hotkeys")
+                .font(.headline)
+            Text("Click a field, then press the new combo. Esc cancels.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            hotkeyRow(label: "AI Copy",
+                      combo: $copyCombo,
+                      defaultCombo: .defaultCopy,
+                      onCommit: { Config.shared.setCopyHotkey($0) })
+
+            hotkeyRow(label: "AI Paste",
+                      combo: $pasteCombo,
+                      defaultCombo: .defaultPaste,
+                      onCommit: { Config.shared.setPasteHotkey($0) })
+
             HStack {
                 Button("Clear key", role: .destructive, action: clear)
                     .disabled(Config.shared.apiKey == nil && keyText.isEmpty)
@@ -52,6 +72,29 @@ private struct SettingsView: View {
         }
         .padding(20)
         .frame(width: 480)
+    }
+
+    @ViewBuilder
+    private func hotkeyRow(
+        label: String,
+        combo: Binding<HotkeyCombo>,
+        defaultCombo: HotkeyCombo,
+        onCommit: @escaping (HotkeyCombo) -> Void
+    ) -> some View {
+        HStack {
+            Text(label)
+                .frame(width: 80, alignment: .leading)
+            KeyRecorderField(combo: combo)
+                .frame(width: 160, height: 26)
+                .onChange(of: combo.wrappedValue) { _, newValue in
+                    onCommit(newValue)
+                }
+            Spacer()
+            Button("Reset") {
+                combo.wrappedValue = defaultCombo
+            }
+            .disabled(combo.wrappedValue == defaultCombo)
+        }
     }
 
     private var trimmedKey: String {
