@@ -1,9 +1,8 @@
 import Foundation
 
-struct LangfuseConfig {
-    static let host = "https://us.cloud.langfuse.com"
-    let publicKey: String
-    let secretKey: String
+struct LogfireConfig {
+    static let tracesEndpoint = "https://logfire-us.pydantic.dev/v1/traces"
+    let writeToken: String
 }
 
 final class Config {
@@ -17,20 +16,19 @@ final class Config {
     static let configFileURL: URL = configDirURL.appendingPathComponent("config.json")
 
     private(set) var apiKey: String?
-    private(set) var langfuse: LangfuseConfig?
+    private(set) var logfire: LogfireConfig?
 
     func load() {
         apiKey = nil
-        langfuse = nil
+        logfire = nil
         guard let data = try? Data(contentsOf: Config.configFileURL),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return }
         if let key = obj["openrouter_api_key"] as? String, !key.isEmpty {
             apiKey = key
         }
-        if let pk = obj["langfuse_public_key"] as? String, !pk.isEmpty,
-           let sk = obj["langfuse_secret_key"] as? String, !sk.isEmpty {
-            langfuse = LangfuseConfig(publicKey: pk, secretKey: sk)
+        if let token = obj["logfire_write_token"] as? String, !token.isEmpty {
+            logfire = LogfireConfig(writeToken: token)
         }
     }
 }
