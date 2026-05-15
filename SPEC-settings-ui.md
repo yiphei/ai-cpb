@@ -636,16 +636,32 @@ LOGFIRE_GEN := Sources/aicpb/LogfireToken.swift
 
 ### 11.3 `logfire-token-gen` — regenerate every build
 
-Add a phony target that writes `LogfireToken.swift` from the env var. The recipe must run on every build (so a change in `AICPB_LOGFIRE_TOKEN` propagates), so declare it `.PHONY` and list it as a prerequisite of `$(EXE)`.
+Add a phony target that writes `LogfireToken.swift` from one of two sources: the `AICPB_LOGFIRE_TOKEN` environment variable, or — if the env var is unset — an `AICPB_LOGFIRE_TOKEN=` line in a top-level `.env` file. Precedence: env var (even if explicitly empty) > `.env` > nil.
+
+The "explicitly empty env var" case is load-bearing: `make dmg` invokes a recursive `$(MAKE)` with `AICPB_LOGFIRE_TOKEN=` to suppress the token. With this precedence, the suppression wins over any `.env` content, so the DMG binary cannot embed a developer token even when `.env` contains one.
+
+The recipe must run on every build (so a change in `AICPB_LOGFIRE_TOKEN` or `.env` propagates), so declare it `.PHONY` and list it as a prerequisite of `$(EXE)`.
 
 ```make
 .PHONY: build run clean install reinstall dmg logfire-token-gen
 
 logfire-token-gen:
 	@mkdir -p Sources/aicpb
-	@if [ -n "$$AICPB_LOGFIRE_TOKEN" ]; then \
-		printf 'enum LogfireBuild { static let token: String? = "%s" }\n' "$$AICPB_LOGFIRE_TOKEN" > $(LOGFIRE_GEN); \
-		echo "→ Logfire token embedded for this build"; \
+	@TOKEN="$${AICPB_LOGFIRE_TOKEN-__UNSET__}"; \
+	SOURCE="env var"; \
+	if [ "$$TOKEN" = "__UNSET__" ]; then \
+		if [ -f .env ]; then \
+			TOKEN=$$(grep -E '^[[:space:]]*AICPB_LOGFIRE_TOKEN=' .env | head -1 \
+				| sed -E 's/^[[:space:]]*AICPB_LOGFIRE_TOKEN=//' \
+				| sed -e 's/^"//' -e 's/"$$//' -e "s/^'//" -e "s/'$$//"); \
+			SOURCE=".env"; \
+		else \
+			TOKEN=""; \
+		fi; \
+	fi; \
+	if [ -n "$$TOKEN" ]; then \
+		printf 'enum LogfireBuild { static let token: String? = "%s" }\n' "$$TOKEN" > $(LOGFIRE_GEN); \
+		echo "→ Logfire token embedded for this build (from $$SOURCE)"; \
 	else \
 		echo 'enum LogfireBuild { static let token: String? = nil }' > $(LOGFIRE_GEN); \
 		echo "→ Logfire token absent — Config.shared.logfire will be nil"; \
@@ -657,7 +673,9 @@ $(EXE): $(SOURCES) logfire-token-gen
 	@swiftc $(SWIFTC_FLAGS) $(SOURCES) $(LOGFIRE_GEN) -o "$(EXE)"
 ```
 
-Logfire tokens are URL-safe (base32/base64 alphabet); no shell escaping of `"`, `\`, or newlines is required. If the implementer wants to be defensive, they may quote-escape, but it is not necessary for correctness given the input domain.
+The `${VAR-default}` parameter expansion (single dash, not `:-`) returns `default` only when `VAR` is **unset**, not when it is set to empty. That is what gives `.env` an "only-if-unset" fallback while preserving the dmg-strip guarantee.
+
+Logfire tokens are URL-safe (base32/base64 alphabet); no shell escaping of `"`, `\`, or newlines is required. The `.env` parser additionally tolerates optional leading whitespace and surrounding single/double quotes around the value.
 
 ### 11.4 `dmg` target — strip the env var defensively
 
@@ -697,16 +715,22 @@ Sources/aicpb/LogfireToken.swift
 ### 11.6 Verification
 
 ```bash
-# Dev build with logfire on:
+# Dev build with logfire on (via env var):
 export AICPB_LOGFIRE_TOKEN=lf-xxx
 make clean && make build && open build/ai-cpb.app
 
-# DMG build — must NOT embed the token even if env var is set:
+# Dev build with logfire on (via .env):
+unset AICPB_LOGFIRE_TOKEN
+echo 'AICPB_LOGFIRE_TOKEN=lf-xxx' > .env
+make clean && make build
+
+# DMG build — must NOT embed the token regardless of source:
+export AICPB_LOGFIRE_TOKEN=lf-xxx   # or leave it in .env
 make dmg
 strings build/ai-cpb.app/Contents/MacOS/aicpb | grep -F "lf-xxx" && echo "LEAK!" || echo "OK"
 ```
 
-The final `strings | grep | echo` line is the canonical check: if the token leaks into the DMG binary, the implementation is incorrect.
+The final `strings | grep | echo` line is the canonical check: if the token leaks into the DMG binary, the implementation is incorrect. The check must print `OK` even when both the env var and `.env` carry the token.
 
 ---
 
@@ -763,11 +787,21 @@ A correct implementation must satisfy **all** of the following. An AI implemente
 
 ### 13.1 Developer workflow note (for Yifei)
 
-To use Logfire on your own dev builds:
+Two ways to supply the token, in precedence order:
 
-```bash
-# in ~/.zshrc or wherever:
-export AICPB_LOGFIRE_TOKEN="lf-..."
-```
+1. **`.env` file in the repo root (preferred for ongoing dev)** — gitignored. Paste your token into the scaffolded line:
 
-Then `make build` produces a logfire-enabled binary. `make dmg` strips the variable defensively, so you can `make dmg` from the same shell without leaking the token. If you ever revoke or rotate the token, just update the export and rebuild — the codegen step regenerates `LogfireToken.swift` on every build.
+   ```
+   AICPB_LOGFIRE_TOKEN=lf-...
+   ```
+
+   Then `make build` picks it up automatically. No shell-config changes needed.
+
+2. **`AICPB_LOGFIRE_TOKEN` env var** — overrides `.env` for a single invocation or a whole shell:
+
+   ```bash
+   AICPB_LOGFIRE_TOKEN=lf-... make build      # one-off
+   export AICPB_LOGFIRE_TOKEN="lf-..."        # persistent for the shell
+   ```
+
+Either way, `make dmg` strips the variable defensively and ignores `.env` (via the explicit-empty env var passed through recursive `$(MAKE)`), so you can `make dmg` from the same checkout without leaking the token. If you ever revoke or rotate the token, just update `.env` (or your export) and rebuild — the codegen step regenerates `LogfireToken.swift` on every build.

@@ -29,9 +29,21 @@ build: $(APP_BUNDLE)
 
 logfire-token-gen:
 	@mkdir -p Sources/aicpb
-	@if [ -n "$$AICPB_LOGFIRE_TOKEN" ]; then \
-		printf 'enum LogfireBuild { static let token: String? = "%s" }\n' "$$AICPB_LOGFIRE_TOKEN" > $(LOGFIRE_GEN); \
-		echo "→ Logfire token embedded for this build"; \
+	@TOKEN="$${AICPB_LOGFIRE_TOKEN-__UNSET__}"; \
+	SOURCE="env var"; \
+	if [ "$$TOKEN" = "__UNSET__" ]; then \
+		if [ -f .env ]; then \
+			TOKEN=$$(grep -E '^[[:space:]]*AICPB_LOGFIRE_TOKEN=' .env | head -1 \
+				| sed -E 's/^[[:space:]]*AICPB_LOGFIRE_TOKEN=//' \
+				| sed -e 's/^"//' -e 's/"$$//' -e "s/^'//" -e "s/'$$//"); \
+			SOURCE=".env"; \
+		else \
+			TOKEN=""; \
+		fi; \
+	fi; \
+	if [ -n "$$TOKEN" ]; then \
+		printf 'enum LogfireBuild { static let token: String? = "%s" }\n' "$$TOKEN" > $(LOGFIRE_GEN); \
+		echo "→ Logfire token embedded for this build (from $$SOURCE)"; \
 	else \
 		echo 'enum LogfireBuild { static let token: String? = nil }' > $(LOGFIRE_GEN); \
 		echo "→ Logfire token absent — Config.shared.logfire will be nil"; \
