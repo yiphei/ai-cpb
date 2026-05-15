@@ -75,13 +75,12 @@ run: build
 	@echo "→ Launching"
 	@open "$(APP_BUNDLE)"
 
-new-run: build
+new-run:
 	@pkill -x $(EXE_NAME) 2>/dev/null; true
 	@echo "→ Wiping Keychain API key and app preferences (first-run simulation)"
 	@security delete-generic-password -s com.yanyiphei.aicpb -a openrouter_api_key >/dev/null 2>&1; true
 	@defaults delete com.yanyiphei.aicpb >/dev/null 2>&1; true
-	@echo "→ Launching"
-	@open "$(APP_BUNDLE)"
+	@$(MAKE) run
 
 install: build
 	@echo "→ Installing to /Applications"
