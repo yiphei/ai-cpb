@@ -25,7 +25,7 @@ AppDelegate (menu bar item, lifecycle, permission gating)
  │     ├── ScreenCapturer — CGDisplayCreateImage of frontmost screen
  │     ├── ImageAnnotator — draw red rect on a CGImage
  │     └── PasteboardDriver — save/write/restore NSPasteboard + CGEvent ⌘V
- ├── AnthropicClient      — Messages API HTTP client (URLSession, no SDK)
+ ├── OpenRouterClient     — OpenRouter chat-completions HTTP client (URLSession, no SDK)
  ├── ContextStore         — in-memory current AI-copy PNG + metadata
  ├── ConfigLoader         — reads ~/.config/ai-cpb/config.json for API key
  └── PermissionsHelper    — checks/requests Screen Recording + Accessibility
@@ -59,7 +59,7 @@ No microphone, camera, contacts, files, or network entitlements beyond outbound 
 
 2. **Info.plist** keys:
    - `LSUIElement` = `YES` (no Dock icon, menu-bar-only app).
-   - `NSAppTransportSecurity` → leave default; api.anthropic.com is HTTPS.
+   - `NSAppTransportSecurity` → leave default; openrouter.ai is HTTPS.
    - Do NOT add a sandbox entitlement (we need broad screen capture + AX, which the sandbox forbids).
 
 3. **Signing & Capabilities:** "Sign to Run Locally" is sufficient. Disable App Sandbox if Xcode added it by default. Disable Hardened Runtime is optional — leave it on; it doesn't block AX or screen capture for unsandboxed apps.
@@ -70,7 +70,7 @@ No microphone, camera, contacts, files, or network entitlements beyond outbound 
 
 6. **Config file** at `~/.config/ai-cpb/config.json`:
    ```json
-   { "anthropic_api_key": "sk-ant-..." }
+   { "openrouter_api_key": "sk-or-..." }
    ```
    `ConfigLoader` reads at startup, surfaces missing-key state in the menu bar dropdown ("⚠️ API key missing"). No UI for entering the key — the user edits the file by hand (single-user MVP).
 
@@ -99,7 +99,7 @@ ai-cpb/
 │   │   ├── ImageAnnotator.swift
 │   │   └── PasteboardDriver.swift
 │   └── AI/
-│       └── AnthropicClient.swift
+│       └── OpenRouterClient.swift
 └── Info.plist
 ```
 
@@ -306,29 +306,30 @@ enum ImageAnnotator {
 
 This resolves the user's caret-flicker concern: we never rely on the system caret; we draw our own unmissable marker on the snapshot itself. Caret state at capture time is irrelevant.
 
-### 6. `AnthropicClient.swift`
+### 6. `OpenRouterClient.swift`
 
-Single endpoint: `POST https://api.anthropic.com/v1/messages`.
+Single endpoint: `POST https://openrouter.ai/api/v1/chat/completions` (OpenAI-compatible).
 
 Headers:
-- `x-api-key: <key>`
-- `anthropic-version: 2023-06-01`
-- `content-type: application/json`
+- `Authorization: Bearer <key>`
+- `Content-Type: application/json`
+- `HTTP-Referer: https://github.com/yiphei/ai-cpb` (OpenRouter attribution; optional)
+- `X-Title: ai-cpb` (OpenRouter attribution; optional)
 
 Body:
 
 ```json
 {
-  "model": "claude-sonnet-4-6",
+  "model": "anthropic/claude-sonnet-4.6",
   "max_tokens": 1024,
-  "system": "<system prompt — see below>",
   "messages": [
+    { "role": "system", "content": "<system prompt — see below>" },
     { "role": "user", "content": [
-        { "type": "image",
-          "source": { "type": "base64", "media_type": "image/png", "data": "<COPY_PNG_B64>" } },
+        { "type": "image_url",
+          "image_url": { "url": "data:image/png;base64,<COPY_PNG_B64>" } },
         { "type": "text", "text": "Image 1 = copied content." },
-        { "type": "image",
-          "source": { "type": "base64", "media_type": "image/png", "data": "<DEST_PNG_B64>" } },
+        { "type": "image_url",
+          "image_url": { "url": "data:image/png;base64,<DEST_PNG_B64>" } },
         { "type": "text", "text": "Image 2 = paste destination (red rectangle marks the target input field)." }
     ]}
   ]
@@ -351,7 +352,7 @@ Output ONLY the exact text to paste. No preamble. No explanation. No surrounding
 If you genuinely cannot determine what to paste, output exactly: <<NO_PASTE>>
 ```
 
-Response parsing: take `response.content[0].text`, trim whitespace. If it equals `<<NO_PASTE>>`, abort the paste with a user-visible error (NSUserNotification or menu-bar flash) and leave the clipboard untouched.
+Response parsing: take `response.choices[0].message.content` (string), trim whitespace. If it equals `<<NO_PASTE>>`, abort the paste with a user-visible error (NSUserNotification or menu-bar flash) and leave the clipboard untouched.
 
 Timeout: 25 s. On non-2xx or timeout, abort + notify, do not paste, do not touch pasteboard.
 
@@ -429,7 +430,7 @@ func run() async {
     // 4. Call Claude.
     let text: String
     do {
-        text = try await AnthropicClient.shared.paste(copyPng: payload.image, destPng: destPng)
+        text = try await OpenRouterClient.shared.paste(copyPng: payload.image, destPng: destPng)
     } catch {
         notify("AI call failed: \(error.localizedDescription)"); return
     }
@@ -528,7 +529,7 @@ Run these end-to-end after first build, in order. Each is a hard pass/fail.
 1. **Permissions.** Launch app, grant Screen Recording + Accessibility when prompted, relaunch.
 2. **Hotkey registration.** With another app focused, press ⌘⇧C → menu-bar status item flashes "copying" and the screen dims slightly with a crosshair cursor. ESC closes cleanly.
 3. **Lasso copy.** Drag a rectangle around any text on screen → overlay closes, status item flashes "copied". The "Clear copied context" menu item is now enabled.
-4. **Plain-substring paste.** Open TextEdit. Type "My name is ___". Place caret on the blank. Press ⌘⇧V. Expected: name appears at caret. Inspect log: 2 images + 1 system + 1 user-text payload sent to api.anthropic.com.
+4. **Plain-substring paste.** Open TextEdit. Type "My name is ___". Place caret on the blank. Press ⌘⇧V. Expected: name appears at caret. Inspect log: 2 images + 1 system + 1 user-text payload sent to openrouter.ai.
 5. **Transform paste (the canonical case).** In Messages or Notes, write `im allergic to onions and also garlic. Oh dont forget tomatoes as well`. ⌘⇧C around it. Open a webpage with an allergies form field (any OpenTable reservation page works; or just a plain `<input placeholder="allergies (comma-separated)">` test page). Click the field. ⌘⇧V. Expected: `onion, garlic, tomato` (order may vary) pasted into the field.
 6. **Caret-flicker resilience.** Repeat #5 five times in rapid succession in the same field. Red-box annotation must succeed each time — the AX bounds are stable regardless of caret blink.
 7. **Multi-monitor copy on secondary.** With cursor on a secondary display, ⌘⇧C → overlay appears only on that display, lasso captures only that display's pixels.
@@ -556,8 +557,8 @@ If steps 4 and 5 pass, the MVP is functional.
 - `ai-cpb/Paste/ScreenCapturer.swift`
 - `ai-cpb/Paste/ImageAnnotator.swift`
 - `ai-cpb/Paste/PasteboardDriver.swift`
-- `ai-cpb/AI/AnthropicClient.swift`
+- `ai-cpb/AI/OpenRouterClient.swift`
 - `Info.plist` (set `LSUIElement = YES`, remove storyboard refs)
-- `~/.config/ai-cpb/config.json` (created by user, holds `anthropic_api_key`)
+- `~/.config/ai-cpb/config.json` (created by user, holds `openrouter_api_key`)
 
 No reused project code (greenfield). All listed APIs are first-party Apple frameworks; no SPM/CocoaPods deps.

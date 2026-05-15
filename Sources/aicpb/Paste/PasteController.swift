@@ -18,7 +18,7 @@ final class PasteController {
 
         guard let apiKey = Config.shared.apiKey else {
             Notify.error("API key missing",
-                         "Add your Anthropic API key to ~/.config/ai-cpb/config.json and relaunch.")
+                         "Add your OpenRouter API key (openrouter_api_key) to ~/.config/ai-cpb/config.json and relaunch.")
             return
         }
 
@@ -58,7 +58,7 @@ final class PasteController {
 
         let text: String
         do {
-            text = try await AnthropicClient(apiKey: apiKey)
+            text = try await OpenRouterClient(apiKey: apiKey)
                 .paste(copyPng: payload.imagePng, destPng: destPng)
         } catch {
             await PasteIndicator.shared.hide()

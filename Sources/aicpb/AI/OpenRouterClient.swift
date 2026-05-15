@@ -1,8 +1,8 @@
 import Foundation
 
-struct AnthropicClient {
-    static let model = "claude-sonnet-4-6"
-    static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
+struct OpenRouterClient {
+    static let model = "anthropic/claude-sonnet-4.6"
+    static let endpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
     static let systemPrompt = """
     You are an AI paste assistant. The user has copied context (Image 1) and wants to paste relevant data into a destination text input on their screen (Image 2). The destination input field is marked with a bright red rectangle.
 
@@ -22,7 +22,7 @@ struct AnthropicClient {
 
     func paste(copyPng: Data, destPng: Data) async throws -> String {
         let startTime = Date()
-        NSLog("ai-cpb: AnthropicClient.paste() start (lf configured=\(Config.shared.langfuse != nil))")
+        NSLog("ai-cpb: OpenRouterClient.paste() start (lf configured=\(Config.shared.langfuse != nil))")
         var responseText: String? = nil
         var inputTokens: Int? = nil
         var outputTokens: Int? = nil
@@ -33,8 +33,8 @@ struct AnthropicClient {
             if let lf = Config.shared.langfuse {
                 LangfuseLogger.shared.log(
                     LangfuseCallRecord(
-                        model: AnthropicClient.model,
-                        systemPrompt: AnthropicClient.systemPrompt,
+                        model: OpenRouterClient.model,
+                        systemPrompt: OpenRouterClient.systemPrompt,
                         copyPng: copyPng,
                         destPng: destPng,
                         startTime: startTime,
@@ -69,40 +69,31 @@ struct AnthropicClient {
     private func sendRequest(copyPng: Data, destPng: Data)
         async throws -> (text: String, inputTokens: Int?, outputTokens: Int?, httpStatus: Int)
     {
-        var req = URLRequest(url: AnthropicClient.endpoint)
+        var req = URLRequest(url: OpenRouterClient.endpoint)
         req.httpMethod = "POST"
-        req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("https://github.com/yiphei/ai-cpb", forHTTPHeaderField: "HTTP-Referer")
+        req.setValue("ai-cpb", forHTTPHeaderField: "X-Title")
         req.timeoutInterval = 25
 
+        let copyDataUri = "data:image/png;base64,\(copyPng.base64EncodedString())"
+        let destDataUri = "data:image/png;base64,\(destPng.base64EncodedString())"
+
+        let userContent: [[String: Any]] = [
+            ["type": "image_url", "image_url": ["url": copyDataUri] as [String: Any]] as [String: Any],
+            ["type": "text", "text": "Image 1 = copied content."],
+            ["type": "image_url", "image_url": ["url": destDataUri] as [String: Any]] as [String: Any],
+            ["type": "text", "text": "Image 2 = paste destination (red rectangle marks the target input field)."]
+        ]
+
         let body: [String: Any] = [
-            "model": AnthropicClient.model,
+            "model": OpenRouterClient.model,
             "max_tokens": 1024,
-            "system": AnthropicClient.systemPrompt,
-            "messages": [[
-                "role": "user",
-                "content": [
-                    [
-                        "type": "image",
-                        "source": [
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": copyPng.base64EncodedString()
-                        ] as [String: Any]
-                    ] as [String: Any],
-                    ["type": "text", "text": "Image 1 = copied content."],
-                    [
-                        "type": "image",
-                        "source": [
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": destPng.base64EncodedString()
-                        ] as [String: Any]
-                    ] as [String: Any],
-                    ["type": "text", "text": "Image 2 = paste destination (red rectangle marks the target input field)."]
-                ]
-            ]]
+            "messages": [
+                ["role": "system", "content": OpenRouterClient.systemPrompt],
+                ["role": "user", "content": userContent]
+            ]
         ]
 
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -120,23 +111,19 @@ struct AnthropicClient {
 
         guard
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let content = root["content"] as? [[String: Any]]
+            let choices = root["choices"] as? [[String: Any]],
+            let first = choices.first,
+            let message = first["message"] as? [String: Any],
+            let text = message["content"] as? String
         else {
             throw NSError(domain: "ai-cpb", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "Unexpected response shape."])
         }
 
         let usage = root["usage"] as? [String: Any]
-        let inT = usage?["input_tokens"] as? Int
-        let outT = usage?["output_tokens"] as? Int
+        let inT = usage?["prompt_tokens"] as? Int
+        let outT = usage?["completion_tokens"] as? Int
 
-        for block in content {
-            if (block["type"] as? String) == "text",
-               let text = block["text"] as? String {
-                return (text.trimmingCharacters(in: .whitespacesAndNewlines), inT, outT, http.statusCode)
-            }
-        }
-        throw NSError(domain: "ai-cpb", code: -3,
-                      userInfo: [NSLocalizedDescriptionKey: "No text content in response."])
+        return (text.trimmingCharacters(in: .whitespacesAndNewlines), inT, outT, http.statusCode)
     }
 }

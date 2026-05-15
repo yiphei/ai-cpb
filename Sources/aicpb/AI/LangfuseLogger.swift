@@ -53,7 +53,7 @@ final class LangfuseLogger {
         var generationBody: [String: Any] = [
             "id": genId,
             "traceId": traceId,
-            "name": "anthropic.messages",
+            "name": "openrouter.chat.completions",
             "model": r.model,
             "input": messages,
             "startTime": startISO,
