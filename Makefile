@@ -23,7 +23,7 @@ SWIFTC_FLAGS := -O \
 	-framework Security \
 	-framework SwiftUI
 
-.PHONY: build run clean install reinstall dmg logfire-token-gen
+.PHONY: build run new-run clean install reinstall dmg logfire-token-gen
 
 build: $(APP_BUNDLE)
 
@@ -72,6 +72,14 @@ $(APP_BUNDLE): $(EXE) $(INFO_PLIST_SRC)
 
 run: build
 	@pkill -x $(EXE_NAME) 2>/dev/null; true
+	@echo "→ Launching"
+	@open "$(APP_BUNDLE)"
+
+new-run: build
+	@pkill -x $(EXE_NAME) 2>/dev/null; true
+	@echo "→ Wiping Keychain API key and app preferences (first-run simulation)"
+	@security delete-generic-password -s com.yanyiphei.aicpb -a openrouter_api_key >/dev/null 2>&1; true
+	@defaults delete com.yanyiphei.aicpb >/dev/null 2>&1; true
 	@echo "→ Launching"
 	@open "$(APP_BUNDLE)"
 
