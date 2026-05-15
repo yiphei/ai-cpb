@@ -5,6 +5,7 @@ private struct SettingsView: View {
     let firstRun: Bool
     let onRequestClose: () -> Void
 
+    @State private var selectedProvider: LLMProvider = Config.shared.provider
     @State private var keyText: String = Config.shared.apiKey ?? ""
     @State private var statusMessage: String? = nil
     @State private var statusIsError: Bool = false
@@ -15,21 +16,31 @@ private struct SettingsView: View {
             if firstRun {
                 Text("Welcome to AI-CPB")
                     .font(.title2).bold()
-                Text("Paste your OpenRouter API key to get started. AI-CPB uses it to decide what to paste based on what you copied.")
+                Text("Choose your LLM provider and paste your API key. AI-CPB uses it to decide what to paste based on what you copied.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("OpenRouter API key")
-                    .font(.headline)
             }
 
-            SecureField("sk-or-...", text: $keyText)
+            Picker("Provider", selection: $selectedProvider) {
+                ForEach(LLMProvider.allCases, id: \.self) { p in
+                    Text(p.displayName).tag(p)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: selectedProvider) { _, new in
+                keyText = (new == Config.shared.provider) ? (Config.shared.apiKey ?? "") : ""
+            }
+
+            Text("\(selectedProvider.displayName) API key")
+                .font(.headline)
+
+            SecureField(selectedProvider.keyPlaceholder, text: $keyText)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { save() }
 
             HStack(spacing: 12) {
-                Link("Get a key at openrouter.ai/keys",
-                     destination: URL(string: "https://openrouter.ai/keys")!)
+                Link("Get a key at \(selectedProvider.keysURL.host ?? "")",
+                     destination: selectedProvider.keysURL)
                     .font(.callout)
                 Spacer()
                 if let msg = statusMessage {
@@ -41,13 +52,13 @@ private struct SettingsView: View {
 
             HStack {
                 Button("Clear key", role: .destructive, action: clear)
-                    .disabled(Config.shared.apiKey == nil && keyText.isEmpty)
+                    .disabled(clearDisabled)
                 Spacer()
                 Button("Cancel", action: onRequestClose)
                     .keyboardShortcut(.cancelAction)
                 Button("Save", action: save)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(trimmedKey.isEmpty || trimmedKey == (Config.shared.apiKey ?? ""))
+                    .disabled(saveDisabled)
             }
         }
         .padding(20)
@@ -58,8 +69,19 @@ private struct SettingsView: View {
         keyText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var saveDisabled: Bool {
+        if trimmedKey.isEmpty { return true }
+        return selectedProvider == Config.shared.provider
+            && trimmedKey == (Config.shared.apiKey ?? "")
+    }
+
+    private var clearDisabled: Bool {
+        if !keyText.isEmpty { return false }
+        return selectedProvider != Config.shared.provider || Config.shared.apiKey == nil
+    }
+
     private func save() {
-        let result = Config.shared.setAPIKey(trimmedKey)
+        let result = Config.shared.setAPIKey(trimmedKey, for: selectedProvider)
         switch result {
         case .success:
             if firstRun {
@@ -73,7 +95,7 @@ private struct SettingsView: View {
     }
 
     private func clear() {
-        let result = Config.shared.setAPIKey(nil)
+        let result = Config.shared.setAPIKey(nil, for: selectedProvider)
         switch result {
         case .success:
             keyText = ""
