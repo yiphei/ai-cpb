@@ -22,7 +22,7 @@ struct OpenRouterClient {
 
     func paste(copyPng: Data, destPng: Data) async throws -> String {
         let startTime = Date()
-        NSLog("ai-cpb: OpenRouterClient.paste() start (lf configured=\(Config.shared.langfuse != nil))")
+        NSLog("ai-cpb: OpenRouterClient.paste() start (logfire configured=\(Config.shared.logfire != nil))")
         var responseText: String? = nil
         var inputTokens: Int? = nil
         var outputTokens: Int? = nil
@@ -30,9 +30,9 @@ struct OpenRouterClient {
         var errorMessage: String? = nil
 
         defer {
-            if let lf = Config.shared.langfuse {
-                LangfuseLogger.shared.log(
-                    LangfuseCallRecord(
+            if let lf = Config.shared.logfire {
+                LogfireLogger.shared.log(
+                    LogfireCallRecord(
                         model: OpenRouterClient.model,
                         systemPrompt: OpenRouterClient.systemPrompt,
                         copyPng: copyPng,
