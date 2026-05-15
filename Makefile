@@ -7,6 +7,7 @@ MACOS_DIR := $(CONTENTS)/MacOS
 RES_DIR := $(CONTENTS)/Resources
 INFO_PLIST_SRC := Resources/Info.plist
 EXE := $(BUILD_DIR)/$(EXE_NAME)
+DMG := $(BUILD_DIR)/$(APP_NAME).dmg
 
 SOURCES := $(shell find Sources/aicpb -name '*.swift')
 
@@ -19,7 +20,7 @@ SWIFTC_FLAGS := -O \
 	-framework Carbon \
 	-framework CoreGraphics
 
-.PHONY: build run clean install reinstall
+.PHONY: build run clean install reinstall dmg
 
 build: $(APP_BUNDLE)
 
@@ -58,6 +59,21 @@ install: build
 reinstall: install
 	@pkill -x $(EXE_NAME) 2>/dev/null; true
 	@open "/Applications/$(APP_NAME).app"
+
+dmg: $(APP_BUNDLE)
+	@echo "→ Staging DMG contents"
+	@rm -rf "$(BUILD_DIR)/dmg-staging" "$(DMG)"
+	@mkdir -p "$(BUILD_DIR)/dmg-staging"
+	@cp -R "$(APP_BUNDLE)" "$(BUILD_DIR)/dmg-staging/"
+	@ln -s /Applications "$(BUILD_DIR)/dmg-staging/Applications"
+	@echo "→ Building $(DMG)"
+	@hdiutil create \
+		-volname "$(APP_NAME)" \
+		-srcfolder "$(BUILD_DIR)/dmg-staging" \
+		-ov -format UDZO \
+		"$(DMG)" >/dev/null
+	@rm -rf "$(BUILD_DIR)/dmg-staging"
+	@echo "✓ Built $(DMG)"
 
 clean:
 	@rm -rf "$(BUILD_DIR)"

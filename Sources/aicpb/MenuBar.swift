@@ -19,7 +19,7 @@ final class MenuBar {
         NSLog("ai-cpb: MenuBar.install() entered")
         // Use a fixed, generous width so macOS cannot shrink us to 0pt.
         statusItem = NSStatusBar.system.statusItem(withLength: 90)
-        statusItem.autosaveName = "com.local.aicpb.status"
+        statusItem.autosaveName = "com.yanyiphei.aicpb.status"
         statusItem.isVisible = true
         NSLog("ai-cpb: NSStatusItem length=\(statusItem.length), isVisible=\(statusItem.isVisible)")
         if let button = statusItem.button {
@@ -172,7 +172,17 @@ final class MenuBar {
 
     @objc private func revealConfig() {
         let dir = Config.configDirURL
+        let file = Config.configFileURL
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        NSWorkspace.shared.activateFileViewerSelecting([Config.configFileURL])
+        if !FileManager.default.fileExists(atPath: file.path) {
+            let template = """
+            {
+                "openrouter_api_key": "",
+                "logfire_write_token": ""
+            }
+            """
+            try? template.write(to: file, atomically: true, encoding: .utf8)
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([file])
     }
 }
