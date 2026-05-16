@@ -88,7 +88,3 @@ The icon flashes briefly on copy and paste as feedback.
 - Unsandboxed — required for broad screen capture and AX. "Sign to Run Locally" is sufficient for personal use.
 - The OpenRouter API key lives in the macOS Keychain (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`). A legacy `~/.config/ai-cpb/config.json` containing `openrouter_api_key` is migrated automatically on first launch and stripped from disk.
 - Optional Logfire tracing for the developer is wired in at compile time via the `AICPB_LOGFIRE_TOKEN` env var (or a `.env` file at the repo root). `make dmg` defensively strips this variable so distributed binaries never embed a token.
-
-## Files
-
-See `SPEC.md` and `SPEC-settings-ui.md` for the full technical specs (component-by-component design, prompts, coordinate conventions, build system, acceptance criteria).
