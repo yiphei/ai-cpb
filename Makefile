@@ -99,6 +99,7 @@ dmg:
 	@rm -rf "$(BUILD_DIR)/dmg-staging" "$(DMG)"
 	@mkdir -p "$(BUILD_DIR)/dmg-staging"
 	@cp -R "$(APP_BUNDLE)" "$(BUILD_DIR)/dmg-staging/"
+	@cp Resources/DMG-README.txt "$(BUILD_DIR)/dmg-staging/README.txt"
 	@ln -s /Applications "$(BUILD_DIR)/dmg-staging/Applications"
 	@echo "→ Building $(DMG)"
 	@hdiutil create \
