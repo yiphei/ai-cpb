@@ -15,7 +15,7 @@ struct OpenRouterClient: LLMClient {
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("https://github.com/yiphei/ai-cpb", forHTTPHeaderField: "HTTP-Referer")
-        req.setValue("ai-cpb", forHTTPHeaderField: "X-Title")
+        req.setValue("copybara", forHTTPHeaderField: "X-Title")
         req.timeoutInterval = 60
 
         var userContent: [[String: Any]] = []
@@ -43,12 +43,12 @@ struct OpenRouterClient: LLMClient {
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else {
-            throw NSError(domain: "ai-cpb", code: -1,
+            throw NSError(domain: "copybara", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: "Non-HTTP response."])
         }
         if http.statusCode < 200 || http.statusCode >= 300 {
             let body = String(data: data, encoding: .utf8) ?? "<no body>"
-            throw NSError(domain: "ai-cpb", code: http.statusCode,
+            throw NSError(domain: "copybara", code: http.statusCode,
                           userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(body)"])
         }
 
@@ -59,7 +59,7 @@ struct OpenRouterClient: LLMClient {
             let message = first["message"] as? [String: Any],
             let text = message["content"] as? String
         else {
-            throw NSError(domain: "ai-cpb", code: -2,
+            throw NSError(domain: "copybara", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "Unexpected response shape."])
         }
 

@@ -113,11 +113,11 @@ final class LogfireLogger {
             "resourceSpans": [[
                 "resource": [
                     "attributes": [
-                        otlpAttr("service.name", string: "ai-cpb")
+                        otlpAttr("service.name", string: "copybara")
                     ]
                 ],
                 "scopeSpans": [[
-                    "scope": ["name": "ai-cpb"],
+                    "scope": ["name": "copybara"],
                     "spans": [span]
                 ]]
             ]]
@@ -131,14 +131,14 @@ final class LogfireLogger {
         req.timeoutInterval = 15
         req.httpBody = try? JSONSerialization.data(withJSONObject: envelope)
 
-        NSLog("ai-cpb: Logfire POST → \(url.absoluteString) (traceId=\(traceIdHex))")
+        NSLog("copybara: Logfire POST → \(url.absoluteString) (traceId=\(traceIdHex))")
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
             let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
             let preview = String(data: data, encoding: .utf8)?.prefix(500) ?? ""
-            NSLog("ai-cpb: Logfire POST ← HTTP \(status): \(preview)")
+            NSLog("copybara: Logfire POST ← HTTP \(status): \(preview)")
         } catch {
-            NSLog("ai-cpb: Logfire POST failed: \(error.localizedDescription)")
+            NSLog("copybara: Logfire POST failed: \(error.localizedDescription)")
         }
     }
 

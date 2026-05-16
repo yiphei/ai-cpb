@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 enum Keychain {
-    static let service = "com.yanyiphei.aicpb"
+    static let service = "com.yanyiphei.copybara"
 
     static let openRouterAccount = "openrouter_api_key"
     static let anthropicAccount  = "anthropic_api_key"

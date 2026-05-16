@@ -1,5 +1,5 @@
-APP_NAME := ai-cpb
-EXE_NAME := aicpb
+APP_NAME := copybara
+EXE_NAME := copybara
 BUILD_DIR := build
 APP_BUNDLE := $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS := $(APP_BUNDLE)/Contents
@@ -9,8 +9,8 @@ INFO_PLIST_SRC := Resources/Info.plist
 EXE := $(BUILD_DIR)/$(EXE_NAME)
 DMG := $(BUILD_DIR)/$(APP_NAME).dmg
 
-SOURCES := $(shell find Sources/aicpb -name '*.swift' -not -name 'LogfireToken.swift')
-LOGFIRE_GEN := Sources/aicpb/LogfireToken.swift
+SOURCES := $(shell find Sources/copybara -name '*.swift' -not -name 'LogfireToken.swift')
+LOGFIRE_GEN := Sources/copybara/LogfireToken.swift
 
 # Build straight with swiftc — SwiftPM under CLT-only has a SwiftVersion typealias
 # mismatch with the bundled PackageDescription dylib, so we skip it.
@@ -28,13 +28,13 @@ SWIFTC_FLAGS := -O \
 build: $(APP_BUNDLE)
 
 logfire-token-gen:
-	@mkdir -p Sources/aicpb
-	@TOKEN="$${AICPB_LOGFIRE_TOKEN-__UNSET__}"; \
+	@mkdir -p Sources/copybara
+	@TOKEN="$${COPYBARA_LOGFIRE_TOKEN-__UNSET__}"; \
 	SOURCE="env var"; \
 	if [ "$$TOKEN" = "__UNSET__" ]; then \
 		if [ -f .env ]; then \
-			TOKEN=$$(grep -E '^[[:space:]]*AICPB_LOGFIRE_TOKEN=' .env | head -1 \
-				| sed -E 's/^[[:space:]]*AICPB_LOGFIRE_TOKEN=//' \
+			TOKEN=$$(grep -E '^[[:space:]]*COPYBARA_LOGFIRE_TOKEN=' .env | head -1 \
+				| sed -E 's/^[[:space:]]*COPYBARA_LOGFIRE_TOKEN=//' \
 				| sed -e 's/^"//' -e 's/"$$//' -e "s/^'//" -e "s/'$$//"); \
 			SOURCE=".env"; \
 		else \
@@ -61,11 +61,11 @@ $(APP_BUNDLE): $(EXE) $(INFO_PLIST_SRC)
 	@cp "$(EXE)" "$(MACOS_DIR)/$(EXE_NAME)"
 	@cp "$(INFO_PLIST_SRC)" "$(CONTENTS)/Info.plist"
 	@echo "→ Codesigning"
-	@if security find-identity -p codesigning | grep -q "ai-cpb-local"; then \
-		echo "   using stable identity: ai-cpb-local"; \
-		codesign -s "ai-cpb-local" --force --deep "$(APP_BUNDLE)" 2>&1 | sed 's/^/   /'; \
+	@if security find-identity -p codesigning | grep -q "copybara-local"; then \
+		echo "   using stable identity: copybara-local"; \
+		codesign -s "copybara-local" --force --deep "$(APP_BUNDLE)" 2>&1 | sed 's/^/   /'; \
 	else \
-		echo "   (no ai-cpb-local cert found; falling back to ad-hoc — TCC will re-prompt on every build)"; \
+		echo "   (no copybara-local cert found; falling back to ad-hoc — TCC will re-prompt on every build)"; \
 		codesign -s - --force --deep "$(APP_BUNDLE)" 2>&1 | sed 's/^/   /'; \
 	fi
 	@echo "✓ Built $(APP_BUNDLE)"
@@ -78,8 +78,8 @@ run: build
 new-run:
 	@pkill -x $(EXE_NAME) 2>/dev/null; true
 	@echo "→ Wiping Keychain API key and app preferences (first-run simulation)"
-	@security delete-generic-password -s com.yanyiphei.aicpb -a openrouter_api_key >/dev/null 2>&1; true
-	@defaults delete com.yanyiphei.aicpb >/dev/null 2>&1; true
+	@security delete-generic-password -s com.yanyiphei.copybara -a openrouter_api_key >/dev/null 2>&1; true
+	@defaults delete com.yanyiphei.copybara >/dev/null 2>&1; true
 	@$(MAKE) run
 
 install: build
@@ -93,8 +93,8 @@ reinstall: install
 	@open "/Applications/$(APP_NAME).app"
 
 dmg:
-	@echo "→ DMG build: stripping AICPB_LOGFIRE_TOKEN for this build"
-	@AICPB_LOGFIRE_TOKEN= $(MAKE) $(APP_BUNDLE)
+	@echo "→ DMG build: stripping COPYBARA_LOGFIRE_TOKEN for this build"
+	@COPYBARA_LOGFIRE_TOKEN= $(MAKE) $(APP_BUNDLE)
 	@echo "→ Staging DMG contents"
 	@rm -rf "$(BUILD_DIR)/dmg-staging" "$(DMG)"
 	@mkdir -p "$(BUILD_DIR)/dmg-staging"

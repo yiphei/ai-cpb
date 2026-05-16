@@ -16,9 +16,9 @@ private struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if firstRun {
-                Text("Welcome to AI-CPB")
+                Text("Welcome to Copybara")
                     .font(.title2).bold()
-                Text("Choose your LLM provider and paste your API key. AI-CPB uses it to decide what to paste based on what you copied.")
+                Text("Choose your LLM provider and paste your API key. Copybara uses it to decide what to paste based on what you copied.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -176,7 +176,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         })
         let hosting = NSHostingController(rootView: view)
         let win = NSWindow(contentViewController: hosting)
-        win.title = "AI-CPB Settings"
+        win.title = "Copybara Settings"
         win.styleMask = [.titled, .closable, .miniaturizable]
         win.isReleasedWhenClosed = false
         win.center()

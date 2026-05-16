@@ -45,7 +45,7 @@ extension LLMClient {
     func paste(copyPngs: [Data], destPng: Data) async throws -> String {
         let startTime = Date()
         let prompt = llmSystemPrompt(now: startTime)
-        NSLog("ai-cpb: \(Self.self).paste() start (logfire configured=\(Config.shared.logfire != nil))")
+        NSLog("copybara: \(Self.self).paste() start (logfire configured=\(Config.shared.logfire != nil))")
 
         var responseText: String? = nil
         var reasoningText: String? = nil
