@@ -17,14 +17,13 @@ final class MenuBar {
 
     func install() {
         NSLog("copybara: MenuBar.install() entered")
-        // Use a fixed, generous width so macOS cannot shrink us to 0pt.
-        statusItem = NSStatusBar.system.statusItem(withLength: 90)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.autosaveName = "com.yanyiphei.copybara.status"
         statusItem.isVisible = true
         NSLog("copybara: NSStatusItem length=\(statusItem.length), isVisible=\(statusItem.isVisible)")
         if let button = statusItem.button {
-            button.title = "Copybara"
-            button.font = NSFont.boldSystemFont(ofSize: 13)
+            button.title = ""
+            button.imagePosition = .imageOnly
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 if let win = button.window {
                     NSLog("copybara: status item window frame = \(win.frame), screen = \(win.screen?.frame ?? .zero)")
@@ -32,15 +31,13 @@ final class MenuBar {
             }
             if let img = brandImage() {
                 button.image = img
-                button.imagePosition = .imageLeft
-                NSLog("copybara: set capybara icon + title on status button")
+                NSLog("copybara: set capybara icon on status button")
             } else if let img = symbol("wand.and.stars") {
                 img.isTemplate = true
                 button.image = img
-                button.imagePosition = .imageLeft
                 NSLog("copybara: brand icon missing; fell back to wand SF Symbol")
             } else {
-                NSLog("copybara: SF Symbol missing; using text title only")
+                NSLog("copybara: SF Symbol missing; using empty status button")
             }
         } else {
             NSLog("copybara: NSStatusItem has nil button (!)")
