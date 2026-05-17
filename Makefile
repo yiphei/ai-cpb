@@ -6,6 +6,8 @@ CONTENTS := $(APP_BUNDLE)/Contents
 MACOS_DIR := $(CONTENTS)/MacOS
 RES_DIR := $(CONTENTS)/Resources
 INFO_PLIST_SRC := Resources/Info.plist
+ICON_SRC := icon.png
+ICNS := $(BUILD_DIR)/AppIcon.icns
 EXE := $(BUILD_DIR)/$(EXE_NAME)
 DMG := $(BUILD_DIR)/$(APP_NAME).dmg
 
@@ -54,12 +56,31 @@ $(EXE): $(SOURCES) logfire-token-gen
 	@echo "→ Compiling Swift sources"
 	@swiftc $(SWIFTC_FLAGS) $(SOURCES) $(LOGFIRE_GEN) -o "$(EXE)"
 
-$(APP_BUNDLE): $(EXE) $(INFO_PLIST_SRC)
+$(ICNS): $(ICON_SRC)
+	@mkdir -p "$(BUILD_DIR)"
+	@echo "→ Generating AppIcon.icns from $(ICON_SRC)"
+	@rm -rf "$(BUILD_DIR)/AppIcon.iconset"
+	@mkdir -p "$(BUILD_DIR)/AppIcon.iconset"
+	@sips -z 16 16     "$(ICON_SRC)" --out "$(BUILD_DIR)/AppIcon.iconset/icon_16x16.png"     >/dev/null
+	@sips -z 32 32     "$(ICON_SRC)" --out "$(BUILD_DIR)/AppIcon.iconset/icon_16x16@2x.png"  >/dev/null
+	@sips -z 32 32     "$(ICON_SRC)" --out "$(BUILD_DIR)/AppIcon.iconset/icon_32x32.png"     >/dev/null
+	@sips -z 64 64     "$(ICON_SRC)" --out "$(BUILD_DIR)/AppIcon.iconset/icon_32x32@2x.png"  >/dev/null
+	@sips -z 128 128   "$(ICON_SRC)" --out "$(BUILD_DIR)/AppIcon.iconset/icon_128x128.png"   >/dev/null
+	@sips -z 256 256   "$(ICON_SRC)" --out "$(BUILD_DIR)/AppIcon.iconset/icon_128x128@2x.png">/dev/null
+	@sips -z 256 256   "$(ICON_SRC)" --out "$(BUILD_DIR)/AppIcon.iconset/icon_256x256.png"   >/dev/null
+	@sips -z 512 512   "$(ICON_SRC)" --out "$(BUILD_DIR)/AppIcon.iconset/icon_256x256@2x.png">/dev/null
+	@sips -z 512 512   "$(ICON_SRC)" --out "$(BUILD_DIR)/AppIcon.iconset/icon_512x512.png"   >/dev/null
+	@cp "$(ICON_SRC)" "$(BUILD_DIR)/AppIcon.iconset/icon_512x512@2x.png"
+	@iconutil -c icns "$(BUILD_DIR)/AppIcon.iconset" -o "$(ICNS)"
+	@rm -rf "$(BUILD_DIR)/AppIcon.iconset"
+
+$(APP_BUNDLE): $(EXE) $(INFO_PLIST_SRC) $(ICNS)
 	@echo "→ Assembling $(APP_BUNDLE)"
 	@rm -rf "$(APP_BUNDLE)"
 	@mkdir -p "$(MACOS_DIR)" "$(RES_DIR)"
 	@cp "$(EXE)" "$(MACOS_DIR)/$(EXE_NAME)"
 	@cp "$(INFO_PLIST_SRC)" "$(CONTENTS)/Info.plist"
+	@cp "$(ICNS)" "$(RES_DIR)/AppIcon.icns"
 	@echo "→ Codesigning"
 	@if security find-identity -p codesigning | grep -q "copybara-local"; then \
 		echo "   using stable identity: copybara-local"; \
