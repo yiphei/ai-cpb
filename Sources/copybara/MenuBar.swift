@@ -17,26 +17,27 @@ final class MenuBar {
 
     func install() {
         NSLog("copybara: MenuBar.install() entered")
-        // Use a fixed, generous width so macOS cannot shrink us to 0pt.
-        statusItem = NSStatusBar.system.statusItem(withLength: 90)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.autosaveName = "com.yanyiphei.copybara.status"
         statusItem.isVisible = true
         NSLog("copybara: NSStatusItem length=\(statusItem.length), isVisible=\(statusItem.isVisible)")
         if let button = statusItem.button {
-            button.title = "Copybara"
-            button.font = NSFont.boldSystemFont(ofSize: 13)
+            button.title = ""
+            button.imagePosition = .imageOnly
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 if let win = button.window {
                     NSLog("copybara: status item window frame = \(win.frame), screen = \(win.screen?.frame ?? .zero)")
                 }
             }
-            if let img = symbol("wand.and.stars") {
+            if let img = brandImage() {
+                button.image = img
+                NSLog("copybara: set capybara icon on status button")
+            } else if let img = symbol("wand.and.stars") {
                 img.isTemplate = true
                 button.image = img
-                button.imagePosition = .imageLeft
-                NSLog("copybara: set wand image + title on status button")
+                NSLog("copybara: brand icon missing; fell back to wand SF Symbol")
             } else {
-                NSLog("copybara: SF Symbol missing; using text title only")
+                NSLog("copybara: SF Symbol missing; using empty status button")
             }
         } else {
             NSLog("copybara: NSStatusItem has nil button (!)")
@@ -137,36 +138,60 @@ final class MenuBar {
 
             switch state {
             case .copying:
-                button.image = self.symbol("wand.and.stars")
+                self.applyBrandImage(to: button)
                 self.setStatus("copying…")
             case .copied:
-                button.image = self.symbol("checkmark.circle.fill")
+                if let img = self.symbol("checkmark.circle.fill") {
+                    img.isTemplate = true
+                    button.image = img
+                }
                 self.setStatus("copied")
                 self.scheduleRestore(after: 0.45)
             case .pasting:
-                button.image = self.symbol("paperplane.fill")
+                if let img = self.symbol("paperplane.fill") {
+                    img.isTemplate = true
+                    button.image = img
+                }
                 self.setStatus("pasting…")
             case .idle:
-                button.image = self.symbol("wand.and.stars")
+                self.applyBrandImage(to: button)
                 self.setStatus("idle")
             }
-            button.image?.isTemplate = true
         }
     }
 
     private func scheduleRestore(after seconds: TimeInterval) {
         let work = DispatchWorkItem { [weak self] in
             guard let self, let button = self.statusItem.button else { return }
-            button.image = self.symbol("wand.and.stars")
-            button.image?.isTemplate = true
+            self.applyBrandImage(to: button)
             self.setStatus("idle")
         }
         flashWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
 
+    private func applyBrandImage(to button: NSStatusBarButton) {
+        if let img = brandImage() {
+            button.image = img
+        } else if let img = symbol("wand.and.stars") {
+            img.isTemplate = true
+            button.image = img
+        }
+    }
+
     private func symbol(_ name: String) -> NSImage? {
         NSImage(systemSymbolName: name, accessibilityDescription: name)
+    }
+
+    private func brandImage() -> NSImage? {
+        guard let url = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png"),
+              let img = NSImage(contentsOf: url) else {
+            return nil
+        }
+        // Menu bar icons render best around 18pt tall on macOS.
+        img.size = NSSize(width: 18, height: 18)
+        img.isTemplate = false
+        return img
     }
 
     @objc private func clearCopy() {
