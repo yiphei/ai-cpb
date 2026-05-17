@@ -1,5 +1,6 @@
 APP_NAME := "copybara"
 EXE_NAME := "copybara"
+BUNDLE_ID := "com.yanyiphei.copybara"
 BUILD_DIR := "build"
 APP_BUNDLE := BUILD_DIR + "/" + APP_NAME + ".app"
 CONTENTS := APP_BUNDLE + "/Contents"
@@ -11,16 +12,59 @@ ICNS := "Resources/AppIcon.icns"
 EXE := BUILD_DIR + "/" + EXE_NAME
 DMG := BUILD_DIR + "/" + APP_NAME + ".dmg"
 LOGFIRE_GEN := "Sources/copybara/LogfireToken.swift"
+INSTALLED_APP := "/Applications/" + APP_NAME + ".app"
 
 # Build straight with swiftc — SwiftPM under CLT-only has a SwiftVersion typealias
 # mismatch with the bundled PackageDescription dylib, so we skip it.
 SWIFTC_FLAGS := "-O -target arm64-apple-macos14.0 -framework AppKit -framework ApplicationServices -framework Carbon -framework CoreGraphics -framework Security -framework SwiftUI"
 
-default: build
+# Build, replace the installed app, relaunch. Keychain, TCC grants, and prefs are untouched.
+update: _bundle
+    @pkill -x {{EXE_NAME}} 2>/dev/null; true
+    @echo "→ Replacing {{INSTALLED_APP}}"
+    @rm -rf "{{INSTALLED_APP}}"
+    @cp -R "{{APP_BUNDLE}}" "/Applications/"
+    @echo "→ Launching"
+    @open "{{INSTALLED_APP}}"
 
-build: _bundle
+# Wipe Keychain, prefs, and TCC grants, then install and launch — simulates a first-run install.
+fresh-install: _bundle
+    @pkill -x {{EXE_NAME}} 2>/dev/null; true
+    @echo "→ Wiping OpenRouter API key from Keychain"
+    @security delete-generic-password -s {{BUNDLE_ID}} -a openrouter_api_key >/dev/null 2>&1; true
+    @echo "→ Wiping app preferences"
+    @defaults delete {{BUNDLE_ID}} >/dev/null 2>&1; true
+    @echo "→ Resetting Screen Recording + Accessibility grants for {{BUNDLE_ID}}"
+    @tccutil reset ScreenCapture {{BUNDLE_ID}} >/dev/null 2>&1; true
+    @tccutil reset Accessibility {{BUNDLE_ID}} >/dev/null 2>&1; true
+    @echo "→ Installing {{INSTALLED_APP}}"
+    @rm -rf "{{INSTALLED_APP}}"
+    @cp -R "{{APP_BUNDLE}}" "/Applications/"
+    @echo "→ Launching"
+    @open "{{INSTALLED_APP}}"
 
-logfire-token-gen:
+# Build a redistributable DMG with no embedded Logfire token.
+dmg:
+    @echo "→ DMG build: stripping COPYBARA_LOGFIRE_TOKEN for this build"
+    @COPYBARA_LOGFIRE_TOKEN= just _bundle
+    @echo "→ Staging DMG contents"
+    @rm -rf "{{BUILD_DIR}}/dmg-staging" "{{DMG}}"
+    @mkdir -p "{{BUILD_DIR}}/dmg-staging"
+    @cp -R "{{APP_BUNDLE}}" "{{BUILD_DIR}}/dmg-staging/"
+    @cp Resources/DMG-README.txt "{{BUILD_DIR}}/dmg-staging/README.txt"
+    @ln -s /Applications "{{BUILD_DIR}}/dmg-staging/Applications"
+    @echo "→ Building {{DMG}}"
+    @hdiutil create \
+        -volname "{{APP_NAME}}" \
+        -srcfolder "{{BUILD_DIR}}/dmg-staging" \
+        -ov -format UDZO \
+        "{{DMG}}" >/dev/null
+    @rm -rf "{{BUILD_DIR}}/dmg-staging"
+    @echo "✓ Built {{DMG}}"
+
+# --- private build helpers ---
+
+_logfire-token-gen:
     @mkdir -p Sources/copybara
     @TOKEN="${COPYBARA_LOGFIRE_TOKEN-__UNSET__}"; \
     SOURCE="env var"; \
@@ -42,7 +86,7 @@ logfire-token-gen:
         echo "→ Logfire token absent — Config.shared.logfire will be nil"; \
     fi
 
-_compile: logfire-token-gen
+_compile: _logfire-token-gen
     @mkdir -p "{{BUILD_DIR}}"
     @echo "→ Compiling Swift sources"
     @SOURCES=$(find Sources/copybara -name '*.swift' -not -name 'LogfireToken.swift'); \
@@ -83,47 +127,3 @@ _bundle: _compile _icns
         codesign -s - --force --deep "{{APP_BUNDLE}}" 2>&1 | sed 's/^/   /'; \
     fi
     @echo "✓ Built {{APP_BUNDLE}}"
-
-run: build
-    @pkill -x {{EXE_NAME}} 2>/dev/null; true
-    @echo "→ Launching"
-    @open "{{APP_BUNDLE}}"
-
-new-run:
-    @pkill -x {{EXE_NAME}} 2>/dev/null; true
-    @echo "→ Wiping Keychain API key and app preferences (first-run simulation)"
-    @security delete-generic-password -s com.yanyiphei.copybara -a openrouter_api_key >/dev/null 2>&1; true
-    @defaults delete com.yanyiphei.copybara >/dev/null 2>&1; true
-    @just run
-
-install: build
-    @echo "→ Installing to /Applications"
-    @rm -rf "/Applications/{{APP_NAME}}.app"
-    @cp -R "{{APP_BUNDLE}}" "/Applications/"
-    @echo "✓ Installed /Applications/{{APP_NAME}}.app"
-
-reinstall: install
-    @pkill -x {{EXE_NAME}} 2>/dev/null; true
-    @open "/Applications/{{APP_NAME}}.app"
-
-dmg:
-    @echo "→ DMG build: stripping COPYBARA_LOGFIRE_TOKEN for this build"
-    @COPYBARA_LOGFIRE_TOKEN= just _bundle
-    @echo "→ Staging DMG contents"
-    @rm -rf "{{BUILD_DIR}}/dmg-staging" "{{DMG}}"
-    @mkdir -p "{{BUILD_DIR}}/dmg-staging"
-    @cp -R "{{APP_BUNDLE}}" "{{BUILD_DIR}}/dmg-staging/"
-    @cp Resources/DMG-README.txt "{{BUILD_DIR}}/dmg-staging/README.txt"
-    @ln -s /Applications "{{BUILD_DIR}}/dmg-staging/Applications"
-    @echo "→ Building {{DMG}}"
-    @hdiutil create \
-        -volname "{{APP_NAME}}" \
-        -srcfolder "{{BUILD_DIR}}/dmg-staging" \
-        -ov -format UDZO \
-        "{{DMG}}" >/dev/null
-    @rm -rf "{{BUILD_DIR}}/dmg-staging"
-    @echo "✓ Built {{DMG}}"
-
-clean:
-    @rm -rf "{{BUILD_DIR}}"
-    @echo "✓ Cleaned"
