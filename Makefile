@@ -74,13 +74,14 @@ $(ICNS): $(ICON_SRC)
 	@iconutil -c icns "$(BUILD_DIR)/AppIcon.iconset" -o "$(ICNS)"
 	@rm -rf "$(BUILD_DIR)/AppIcon.iconset"
 
-$(APP_BUNDLE): $(EXE) $(INFO_PLIST_SRC) $(ICNS)
+$(APP_BUNDLE): $(EXE) $(INFO_PLIST_SRC) $(ICNS) $(ICON_SRC)
 	@echo "→ Assembling $(APP_BUNDLE)"
 	@rm -rf "$(APP_BUNDLE)"
 	@mkdir -p "$(MACOS_DIR)" "$(RES_DIR)"
 	@cp "$(EXE)" "$(MACOS_DIR)/$(EXE_NAME)"
 	@cp "$(INFO_PLIST_SRC)" "$(CONTENTS)/Info.plist"
 	@cp "$(ICNS)" "$(RES_DIR)/AppIcon.icns"
+	@cp "$(ICON_SRC)" "$(RES_DIR)/MenuBarIcon.png"
 	@echo "→ Codesigning"
 	@if security find-identity -p codesigning | grep -q "copybara-local"; then \
 		echo "   using stable identity: copybara-local"; \
