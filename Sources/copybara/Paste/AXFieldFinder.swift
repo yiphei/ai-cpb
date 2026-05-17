@@ -21,9 +21,44 @@ enum AXFieldFinder {
     /// center point lies inside `lassoAX` (AX top-left coords).
     /// Order: AX tree traversal order (≈ tab order).
     static func find(in appElement: AXUIElement, intersecting lassoAX: CGRect) -> [DetectedField] {
-        var out: [DetectedField] = []
-        walk(appElement, lassoAX: lassoAX, into: &out, depth: 0)
-        return out
+        var raw: [DetectedField] = []
+        walk(appElement, lassoAX: lassoAX, into: &raw, depth: 0)
+        let deduped = dedupe(raw)
+        NSLog("copybara: AXFieldFinder found \(raw.count) raw → \(deduped.count) after dedupe")
+        for (i, f) in deduped.enumerated() {
+            NSLog("copybara:   field \(i + 1) [\(f.role ?? "?")] rect=\(f.rectAX)")
+        }
+        return deduped
+    }
+
+    /// Browser/React AX trees often expose the same visible input as multiple
+    /// nested AXTextField elements (the wrapper + the inner input + sometimes
+    /// internal edit elements). They overlap heavily but don't strictly contain
+    /// each other, so a pure "child wins" rule misses them. Rule used here:
+    /// if two detected fields' rects overlap by more than half of the smaller
+    /// field's area, treat them as the same logical input and keep the smaller
+    /// one (the inner, actually-focusable element).
+    private static func dedupe(_ fields: [DetectedField]) -> [DetectedField] {
+        var result: [DetectedField] = []
+        outer: for f in fields {
+            let fArea = f.rectAX.width * f.rectAX.height
+            for i in result.indices {
+                let existing = result[i]
+                let eArea = existing.rectAX.width * existing.rectAX.height
+                let inter = f.rectAX.intersection(existing.rectAX)
+                if inter.isNull || inter.isEmpty { continue }
+                let interArea = inter.width * inter.height
+                let minArea = min(fArea, eArea)
+                if minArea > 0 && interArea / minArea > 0.5 {
+                    if fArea < eArea {
+                        result[i] = f
+                    }
+                    continue outer
+                }
+            }
+            result.append(f)
+        }
+        return result
     }
 
     private static func walk(_ element: AXUIElement,
