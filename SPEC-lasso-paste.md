@@ -87,11 +87,11 @@ This document is self-contained for a single implementer. It assumes familiarity
 
 ### 3.1 New files
 
-| File | Approx. LOC | Purpose |
-|---|---|---|
-| `Sources/copybara/Paste/LassoPasteController.swift` | ~180 | Orchestrates the whole flow: lasso → field discovery → screenshot → parallel LLM → fill loop. Mirrors `CopyModeController`'s lifecycle pattern. |
-| `Sources/copybara/Paste/AXFieldFinder.swift` | ~140 | Recursively walks the AX tree of the captured frontmost app, collects writable text fields whose center is in the lasso rect. |
-| `Sources/copybara/Paste/MultiFieldWriter.swift` | ~80 | Per-field focus + ⌘A + pasteboard write + ⌘V + delay loop. Pure utility. |
+| File | Purpose |
+|---|---|
+| `Sources/copybara/Paste/LassoPasteController.swift` | Orchestrates the whole flow: lasso → field discovery → screenshot → parallel LLM → fill loop. Mirrors `CopyModeController`'s lifecycle pattern. |
+| `Sources/copybara/Paste/AXFieldFinder.swift` | Recursively walks the AX tree of the captured frontmost app, collects writable text fields whose center is in the lasso rect. |
+| `Sources/copybara/Paste/MultiFieldWriter.swift` | Per-field focus + ⌘A + pasteboard write + ⌘V + delay loop. Pure utility. |
 
 ### 3.2 Modified files
 
@@ -262,7 +262,7 @@ We render **N annotated screenshots** — one per call — each emphasizing a di
 
 - **Current field**: red stroke (`CGColor(red: 1, green: 0, blue: 0, alpha: 1)`), thick (`max(6, 4 * scale)`), 10% red fill.
 - **Sibling fields**: gray stroke (`CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 0.9)`), thinner (`max(3, 2 * scale)`), no fill.
-- **Index labels**: numeric `"1"`, `"2"`, ... drawn **outside** each box (above the top-left corner) with a 2-pixel leader line, using a bold system font sized `24 * scale` points. Label color matches box color. Background: small white rounded-rect with 80% alpha behind the digit so it remains readable on any backdrop.
+- **Index labels**: numeric `"1"`, `"2"`, ... drawn **outside** each box (above the top-left corner) with a 2-pixel leader line, using a bold system font sized `24 * scale` points. If positioning the label above would render it off the screen's pixel rect (field is near the top of the screen), position the label below the box instead. Label color matches box color. Background: small white rounded-rect with 80% alpha behind the digit so it remains readable on any backdrop.
 
 `ImageAnnotator.drawNumberedBoxes(on:, fields:, on screen:)` accepts:
 
@@ -658,58 +658,27 @@ The existing `hotkeyRow` helper requires no change. `KeyRecorderField` is unchan
 
 ---
 
-## 10. Order of implementation (recommended)
+## 10. Acceptance criteria
 
-The riskiest piece is the AX tree walker — verify it actually surfaces fields in real browsers/apps before investing in the rest.
+A lasso-paste build is considered conformant when all of the following hold:
 
-1. **`AXFieldFinder.swift`** + a tiny ad-hoc test harness. Hard-code a lasso rect, dump detected fields' rects and roles to the console. Test against:
-   - Safari with a real form (e.g., the OpenTable reservation page).
-   - Chrome with a real form.
-   - Native AppKit app (TextEdit + a couple of NSTextFields in a test bench, or System Settings → some preference pane with inputs).
-   - If <80% recall on the hand-picked test pages, fix before continuing.
-2. **`PasteboardDriver.sendCommandA()`** + **`MultiFieldWriter.swift`**. Wire to a hard-coded test that focuses a known field and writes "hello" — verify the ⌘A + ⌘V loop behaves on a React form.
-3. **`ImageAnnotator.drawNumberedBoxes`**. Render to a PNG, open it, eyeball the layout. Adjust label leader-line / font size until it's clearly legible at typical screenshot resolutions.
-4. **`LassoPasteController`** orchestration (lasso → fields → annotation → parallel LLM → write).
-5. **`LassoView` tint parameterization** + paste-mode blue overlay.
-6. **`HotkeyCombo`, `Config`, `HotkeyManager`, `AppDelegate`** wiring for `⌘⇧X`.
-7. **`SettingsWindow`** third hotkey row.
-8. **`AnthropicClient`** prompt-caching breakpoint (last — purely an optimization, doesn't gate correctness).
-
----
-
-## 11. Acceptance criteria
-
-Manual test plan to declare done:
-
-- [ ] `⌘⇧X` activates blue lasso overlay (distinguishable from copy-mode red).
-- [ ] Lasso with `Esc` cancels; tiny drag cancels.
-- [ ] Lasso around a 3-field native form (e.g., a System Settings pane with first/last/email): all 3 fields detected, 3 LLM calls fire, 3 fields filled, user's pasteboard restored at end.
-- [ ] Lasso around a 3-field Safari form (e.g., a sign-up form): all 3 fields detected, filled. Verify React-controlled inputs persist (don't snap back).
-- [ ] Lasso around a 5-field Chrome form: same.
-- [ ] Lasso around an empty region of the screen: error notification "No input fields found", no crash.
-- [ ] Lasso around a region with one field already filled with junk: junk is replaced (⌘A worked), not appended.
-- [ ] Lasso with no copy context yet: error notification "No AI-copied content yet".
-- [ ] Lasso while LLM is mid-call: subsequent `⌘⇧X` is suppressed.
-- [ ] Settings UI shows three hotkey rows, all editable, defaults restorable.
-- [ ] Hotkey rebind to a different combo (e.g., `⌃⌥P`) takes effect immediately without restart.
-- [ ] Logfire (if configured) shows N separate records per lasso paste, with `cache_creation_input_tokens` set on the first record and `cache_read_input_tokens` set on the rest (within 5min of each other).
-- [ ] A field's LLM call returning `<<NO_PASTE>>` leaves that field untouched; other fields still fill; summary notification lists the declined field.
+- `⌘⇧X` activates the blue lasso overlay (visually distinguishable from copy-mode red).
+- `Esc` cancels the overlay; drag <8pt cancels.
+- Lasso around a 3-field native form (e.g., a System Settings pane with first/last/email): all 3 fields detected, 3 LLM calls fire, 3 fields filled, user's pasteboard restored at end.
+- Lasso around a 3-field Safari form: all 3 fields detected, filled. React-controlled inputs persist (don't snap back).
+- Lasso around a 5-field Chrome form: same.
+- Lasso around an empty region: error notification "No input fields found", no crash.
+- Lasso around a region whose fields contain pre-existing text: pre-existing text is replaced, not appended.
+- Lasso with no copy context yet: error notification "No AI-copied content yet".
+- Lasso while LLM is mid-call: subsequent `⌘⇧X` is suppressed.
+- Settings UI shows three hotkey rows, all editable, defaults restorable.
+- Rebind to a different combo (e.g., `⌃⌥P`) takes effect immediately without restart.
+- Logfire (if configured) records N separate entries per lasso paste, with `cache_creation_input_tokens` on the first and `cache_read_input_tokens` on the rest (within 5min of each other).
+- A field whose LLM call returns `<<NO_PASTE>>` is left untouched; other fields still fill; summary notification lists the declined field.
 
 ---
 
-## 12. Open implementation notes
-
-These are implementer-judgment calls, not spec mandates. The implementer should choose pragmatically.
-
-- **Index labels above-or-below the box.** Above the top-left is the default. If a field is near the top of the screen and the label would render off-screen, position below the box instead. Trivial bounds check on the destination screen's pixel rect.
-- **Sibling box stroke width.** `max(3, 2 * scale)` is a starting point. If the screenshot becomes visually noisy with many siblings, drop sibling alpha to 0.6.
-- **Lasso paste indicator wording.** `"AI pasting…"` matches single-field. Optionally `"AI pasting N fields…"` if implementing per-batch wording feels worth it. Not required.
-- **AX tree walk depth limit.** 60 is conservative. If real apps hit it, increase. Logging at the limit during the walker's first dogfood pass will tell you whether it's reached in practice.
-- **Recursion vs queue.** AX walker is written recursively for clarity; depth limit prevents stack overflow. If you measure stack usage and find it's fine in practice (it will be), leave it. Otherwise convert to an iterative queue.
-
----
-
-## 13. References to existing code
+## 11. References to existing code
 
 | Existing pattern | File:line | What to reuse |
 |---|---|---|
