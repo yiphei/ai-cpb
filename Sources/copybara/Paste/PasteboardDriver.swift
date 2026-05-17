@@ -45,4 +45,19 @@ enum PasteboardDriver {
         vDown.post(tap: .cghidEventTap)
         vUp.post(tap: .cghidEventTap)
     }
+
+    static func sendCommandA() {
+        let src = CGEventSource(stateID: .combinedSessionState)
+        guard let aDown = CGEvent(keyboardEventSource: src,
+                                  virtualKey: CGKeyCode(kVK_ANSI_A),
+                                  keyDown: true),
+              let aUp = CGEvent(keyboardEventSource: src,
+                                virtualKey: CGKeyCode(kVK_ANSI_A),
+                                keyDown: false)
+        else { return }
+        aDown.flags = .maskCommand
+        aUp.flags = .maskCommand
+        aDown.post(tap: .cghidEventTap)
+        aUp.post(tap: .cghidEventTap)
+    }
 }

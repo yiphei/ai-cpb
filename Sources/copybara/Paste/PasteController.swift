@@ -65,9 +65,16 @@ final class PasteController {
             }
         }()
 
+        let parentSpan = LogfirePasteSpan(name: "AI Paste",
+                                          kind: "single",
+                                          config: Config.shared.logfire)
+        defer { parentSpan.finish(callCount: 1) }
+
         let text: String
         do {
-            text = try await client.paste(copyPngs: copies.map(\.imagePng), destPng: destPng)
+            text = try await client.paste(copyPngs: copies.map(\.imagePng),
+                                          destPng: destPng,
+                                          parentSpan: parentSpan)
         } catch {
             await PasteIndicator.shared.hide()
             Notify.error("AI call failed", error.localizedDescription)

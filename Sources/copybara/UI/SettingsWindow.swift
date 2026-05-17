@@ -9,6 +9,7 @@ private struct SettingsView: View {
     @State private var keyText: String = Config.shared.apiKey ?? ""
     @State private var copyCombo: HotkeyCombo = Config.shared.copyHotkey
     @State private var pasteCombo: HotkeyCombo = Config.shared.pasteHotkey
+    @State private var lassoPasteCombo: HotkeyCombo = Config.shared.lassoPasteHotkey
     @State private var statusMessage: String? = nil
     @State private var statusIsError: Bool = false
     @State private var statusClearWorkItem: DispatchWorkItem? = nil
@@ -69,6 +70,11 @@ private struct SettingsView: View {
                       combo: $pasteCombo,
                       defaultCombo: .defaultPaste,
                       onCommit: { Config.shared.setPasteHotkey($0) })
+
+            hotkeyRow(label: "AI Lasso Paste",
+                      combo: $lassoPasteCombo,
+                      defaultCombo: .defaultLassoPaste,
+                      onCommit: { Config.shared.setLassoPasteHotkey($0) })
 
             HStack {
                 Button("Clear key", role: .destructive, action: clear)

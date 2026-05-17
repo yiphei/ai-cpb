@@ -24,6 +24,7 @@ final class Config {
     private(set) var apiKey: String?
     private(set) var copyHotkey: HotkeyCombo = .defaultCopy
     private(set) var pasteHotkey: HotkeyCombo = .defaultPaste
+    private(set) var lassoPasteHotkey: HotkeyCombo = .defaultLassoPaste
 
     let logfire: LogfireConfig?
 
@@ -38,6 +39,7 @@ final class Config {
     func load() {
         copyHotkey = .defaultCopy
         pasteHotkey = .defaultPaste
+        lassoPasteHotkey = .defaultLassoPaste
         provider = UserDefaults.standard.string(forKey: Config.providerDefaultsKey)
             .flatMap(LLMProvider.init(rawValue:)) ?? .openRouter
 
@@ -55,6 +57,10 @@ final class Config {
         if let dict = jsonObject["paste_hotkey"] as? [String: Any],
            let combo = HotkeyCombo(jsonDict: dict) {
             pasteHotkey = combo
+        }
+        if let dict = jsonObject["lasso_paste_hotkey"] as? [String: Any],
+           let combo = HotkeyCombo(jsonDict: dict) {
+            lassoPasteHotkey = combo
         }
 
         if provider == .openRouter, apiKey == nil,
@@ -117,6 +123,13 @@ final class Config {
         NotificationCenter.default.post(name: Config.hotkeysDidChangeNotification, object: nil)
     }
 
+    func setLassoPasteHotkey(_ combo: HotkeyCombo) {
+        guard combo != lassoPasteHotkey else { return }
+        lassoPasteHotkey = combo
+        persistHotkeys()
+        NotificationCenter.default.post(name: Config.hotkeysDidChangeNotification, object: nil)
+    }
+
     private func persistHotkeys() {
         var dict: [String: Any] = [:]
         if let data = try? Data(contentsOf: Config.configFileURL),
@@ -125,6 +138,7 @@ final class Config {
         }
         dict["copy_hotkey"] = copyHotkey.jsonDict
         dict["paste_hotkey"] = pasteHotkey.jsonDict
+        dict["lasso_paste_hotkey"] = lassoPasteHotkey.jsonDict
         Self.writeJSON(dict)
     }
 

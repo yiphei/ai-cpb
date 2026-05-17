@@ -7,6 +7,7 @@ protocol LassoViewDelegate: AnyObject {
 
 final class LassoView: NSView {
     weak var delegate: LassoViewDelegate?
+    var tintColor: NSColor = .systemRed
 
     private var startPoint: NSPoint?
     private var currentPoint: NSPoint?
@@ -55,12 +56,12 @@ final class LassoView: NSView {
             width: abs(c.x - s.x),
             height: abs(c.y - s.y)
         )
-        NSColor.systemRed.withAlphaComponent(0.10).setFill()
+        tintColor.withAlphaComponent(0.10).setFill()
         r.fill()
 
         let path = NSBezierPath(rect: r)
         path.lineWidth = 2
-        NSColor.systemRed.setStroke()
+        tintColor.setStroke()
         path.stroke()
     }
 

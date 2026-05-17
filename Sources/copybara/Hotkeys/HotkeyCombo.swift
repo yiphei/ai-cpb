@@ -15,6 +15,11 @@ struct HotkeyCombo: Equatable {
         carbonModifiers: UInt32(cmdKey | shiftKey)
     )
 
+    static let defaultLassoPaste = HotkeyCombo(
+        keyCode: UInt32(kVK_ANSI_X),
+        carbonModifiers: UInt32(cmdKey | shiftKey)
+    )
+
     var displayString: String {
         var s = ""
         if carbonModifiers & UInt32(controlKey) != 0 { s += "⌃" }
