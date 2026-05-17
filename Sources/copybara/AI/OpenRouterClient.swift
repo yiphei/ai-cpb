@@ -7,7 +7,10 @@ struct OpenRouterClient: LLMClient {
     let model: String  = "anthropic/claude-sonnet-4.6"
     let system: String = "openai"
 
-    func sendRequest(systemPrompt: String, copyPngs: [Data], destPng: Data)
+    func sendRequest(systemPrompt: String,
+                     copyPngs: [Data],
+                     destPng: Data,
+                     trailingUserText: String?)
         async throws -> LLMResponse
     {
         var req = URLRequest(url: OpenRouterClient.endpoint)
@@ -28,6 +31,10 @@ struct OpenRouterClient: LLMClient {
         let destIndex = copyPngs.count + 1
         userContent.append(["type": "image_url", "image_url": ["url": destDataUri] as [String: Any]] as [String: Any])
         userContent.append(["type": "text", "text": "Image \(destIndex) = paste destination (red rectangle marks the target input field)."])
+
+        if let trailing = trailingUserText, !trailing.isEmpty {
+            userContent.append(["type": "text", "text": trailing])
+        }
 
         let body: [String: Any] = [
             "model": model,

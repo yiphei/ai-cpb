@@ -22,6 +22,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeys.onPaste = {
             Task { await PasteController.shared.run() }
         }
+        hotkeys.onLassoPaste = {
+            Task { await LassoPasteController.shared.run() }
+        }
         hotkeys.install()
 
         Permissions.checkAll(promptIfMissing: true)

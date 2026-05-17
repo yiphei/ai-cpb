@@ -4,13 +4,15 @@ import Carbon.HIToolbox
 final class HotkeyManager {
     static let shared = HotkeyManager()
 
-    enum HotkeyID: UInt32 { case copy = 1, paste = 2 }
+    enum HotkeyID: UInt32 { case copy = 1, paste = 2, lassoPaste = 3 }
 
     var onCopy: (() -> Void)?
     var onPaste: (() -> Void)?
+    var onLassoPaste: (() -> Void)?
 
     private var copyRef: EventHotKeyRef?
     private var pasteRef: EventHotKeyRef?
+    private var lassoPasteRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
     private var suspendCount = 0
 
@@ -34,6 +36,7 @@ final class HotkeyManager {
                     switch HotkeyID(rawValue: hkID.id) {
                     case .copy: mgr.onCopy?()
                     case .paste: mgr.onPaste?()
+                    case .lassoPaste: mgr.onLassoPaste?()
                     case .none: break
                     }
                 }
@@ -58,8 +61,9 @@ final class HotkeyManager {
     func applyCurrentHotkeys() {
         unregisterAll()
         guard suspendCount == 0 else { return }
-        copyRef  = register(combo: Config.shared.copyHotkey,  id: .copy)
-        pasteRef = register(combo: Config.shared.pasteHotkey, id: .paste)
+        copyRef       = register(combo: Config.shared.copyHotkey,       id: .copy)
+        pasteRef      = register(combo: Config.shared.pasteHotkey,      id: .paste)
+        lassoPasteRef = register(combo: Config.shared.lassoPasteHotkey, id: .lassoPaste)
     }
 
     /// Temporarily unregister the global hotkeys. Re-entrant: each `suspend()`
@@ -77,8 +81,9 @@ final class HotkeyManager {
     }
 
     private func unregisterAll() {
-        if let r = copyRef  { UnregisterEventHotKey(r); copyRef  = nil }
-        if let r = pasteRef { UnregisterEventHotKey(r); pasteRef = nil }
+        if let r = copyRef       { UnregisterEventHotKey(r); copyRef       = nil }
+        if let r = pasteRef      { UnregisterEventHotKey(r); pasteRef      = nil }
+        if let r = lassoPasteRef { UnregisterEventHotKey(r); lassoPasteRef = nil }
     }
 
     private func register(combo: HotkeyCombo, id: HotkeyID) -> EventHotKeyRef? {

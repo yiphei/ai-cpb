@@ -37,12 +37,17 @@ protocol LLMClient {
     var model: String  { get }
     var system: String { get }
 
-    func sendRequest(systemPrompt: String, copyPngs: [Data], destPng: Data)
+    func sendRequest(systemPrompt: String,
+                     copyPngs: [Data],
+                     destPng: Data,
+                     trailingUserText: String?)
         async throws -> LLMResponse
 }
 
 extension LLMClient {
-    func paste(copyPngs: [Data], destPng: Data) async throws -> String {
+    func paste(copyPngs: [Data],
+               destPng: Data,
+               trailingUserText: String? = nil) async throws -> String {
         let startTime = Date()
         let prompt = llmSystemPrompt(now: startTime)
         NSLog("copybara: \(Self.self).paste() start (logfire configured=\(Config.shared.logfire != nil))")
@@ -78,7 +83,10 @@ extension LLMClient {
         }
 
         do {
-            let r = try await sendRequest(systemPrompt: prompt, copyPngs: copyPngs, destPng: destPng)
+            let r = try await sendRequest(systemPrompt: prompt,
+                                          copyPngs: copyPngs,
+                                          destPng: destPng,
+                                          trailingUserText: trailingUserText)
             responseText = r.text
             reasoningText = r.reasoning
             inputTokens = r.inputTokens

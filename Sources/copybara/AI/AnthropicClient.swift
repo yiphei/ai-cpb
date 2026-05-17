@@ -8,7 +8,10 @@ struct AnthropicClient: LLMClient {
     let model: String  = "claude-sonnet-4-6"
     let system: String = "anthropic"
 
-    func sendRequest(systemPrompt: String, copyPngs: [Data], destPng: Data)
+    func sendRequest(systemPrompt: String,
+                     copyPngs: [Data],
+                     destPng: Data,
+                     trailingUserText: String?)
         async throws -> LLMResponse
     {
         var req = URLRequest(url: AnthropicClient.endpoint)
@@ -40,6 +43,10 @@ struct AnthropicClient: LLMClient {
             ] as [String: Any]
         ] as [String: Any])
         userContent.append(["type": "text", "text": "Image \(destIndex) = paste destination (red rectangle marks the target input field)."])
+
+        if let trailing = trailingUserText, !trailing.isEmpty {
+            userContent.append(["type": "text", "text": trailing])
+        }
 
         // Adaptive extended thinking: model uses up to budget_tokens of thinking and stops
         // when done. max_tokens must exceed budget_tokens; the difference is the cap on the
