@@ -7,7 +7,7 @@ MACOS_DIR := $(CONTENTS)/MacOS
 RES_DIR := $(CONTENTS)/Resources
 INFO_PLIST_SRC := Resources/Info.plist
 ICON_SRC := icon.png
-ICNS := $(BUILD_DIR)/AppIcon.icns
+ICNS := Resources/AppIcon.icns
 EXE := $(BUILD_DIR)/$(EXE_NAME)
 DMG := $(BUILD_DIR)/$(APP_NAME).dmg
 
