@@ -15,6 +15,46 @@ struct LogfireCallRecord {
     let outputTokens: Int?
     let httpStatus: Int?
     let errorMessage: String?
+    /// If set, this call is a child of a paste-action span — children share its
+    /// traceId and reference its spanId as their parent, so Logfire groups
+    /// the N LLM calls of one paste under a single wrapper span.
+    let parentTraceId: String?
+    let parentSpanId: String?
+}
+
+/// Wraps the N LLM calls of one paste action (single-field or lasso) so they
+/// share a Logfire trace and roll up under one parent span. Cheap to construct
+/// even when Logfire is disabled — `finish()` is a no-op without config.
+struct LogfirePasteSpan: Sendable {
+    let traceId: String
+    let spanId: String
+    let startTime: Date
+    let name: String
+    let kind: String   // "single" or "lasso" — surfaces as a span attribute
+    let config: LogfireConfig?
+
+    init(name: String, kind: String, config: LogfireConfig?) {
+        self.traceId = LogfireLogger.randomHex(byteCount: 16)
+        self.spanId = LogfireLogger.randomHex(byteCount: 8)
+        self.startTime = Date()
+        self.name = name
+        self.kind = kind
+        self.config = config
+    }
+
+    func finish(callCount: Int) {
+        guard let config = config else { return }
+        LogfireLogger.shared.logParent(
+            traceId: traceId,
+            spanId: spanId,
+            name: name,
+            kind: kind,
+            callCount: callCount,
+            startTime: startTime,
+            endTime: Date(),
+            config: config
+        )
+    }
 }
 
 final class LogfireLogger {
@@ -27,7 +67,7 @@ final class LogfireLogger {
     }
 
     private func send(_ r: LogfireCallRecord, config: LogfireConfig) async {
-        let traceIdHex = LogfireLogger.randomHex(byteCount: 16)
+        let traceIdHex = r.parentTraceId ?? LogfireLogger.randomHex(byteCount: 16)
         let spanIdHex = LogfireLogger.randomHex(byteCount: 8)
         let startNanos = LogfireLogger.unixNanos(r.startTime)
         let endNanos = LogfireLogger.unixNanos(r.endTime)
@@ -105,6 +145,9 @@ final class LogfireLogger {
             "endTimeUnixNano": String(endNanos),
             "attributes": attributes
         ]
+        if let parent = r.parentSpanId {
+            span["parentSpanId"] = parent
+        }
         if let err = r.errorMessage {
             span["status"] = ["code": 2, "message": err]
         }
@@ -142,6 +185,84 @@ final class LogfireLogger {
         }
     }
 
+    func logParent(traceId: String,
+                   spanId: String,
+                   name: String,
+                   kind: String,
+                   callCount: Int,
+                   startTime: Date,
+                   endTime: Date,
+                   config: LogfireConfig) {
+        Task.detached(priority: .utility) { [weak self] in
+            await self?.sendParent(
+                traceId: traceId, spanId: spanId, name: name, kind: kind,
+                callCount: callCount, startTime: startTime, endTime: endTime,
+                config: config
+            )
+        }
+    }
+
+    private func sendParent(traceId: String,
+                            spanId: String,
+                            name: String,
+                            kind: String,
+                            callCount: Int,
+                            startTime: Date,
+                            endTime: Date,
+                            config: LogfireConfig) async {
+        let startNanos = LogfireLogger.unixNanos(startTime)
+        let endNanos = LogfireLogger.unixNanos(endTime)
+
+        let attributes: [[String: Any]] = [
+            otlpAttr("paste.kind", string: kind),
+            otlpAttr("paste.call_count", int: callCount),
+            otlpAttr("logfire.span_type", string: "span"),
+            otlpAttr("logfire.msg", string: name)
+        ]
+
+        let span: [String: Any] = [
+            "traceId": traceId,
+            "spanId": spanId,
+            "name": name,
+            "kind": 1,   // INTERNAL — wraps the per-call CLIENT spans
+            "startTimeUnixNano": String(startNanos),
+            "endTimeUnixNano": String(endNanos),
+            "attributes": attributes
+        ]
+
+        let envelope: [String: Any] = [
+            "resourceSpans": [[
+                "resource": [
+                    "attributes": [
+                        otlpAttr("service.name", string: "copybara")
+                    ]
+                ],
+                "scopeSpans": [[
+                    "scope": ["name": "copybara"],
+                    "spans": [span]
+                ]]
+            ]]
+        ]
+
+        guard let url = URL(string: LogfireConfig.tracesEndpoint) else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(config.writeToken, forHTTPHeaderField: "Authorization")
+        req.timeoutInterval = 15
+        req.httpBody = try? JSONSerialization.data(withJSONObject: envelope)
+
+        NSLog("copybara: Logfire POST parent → traceId=\(traceId) kind=\(kind) callCount=\(callCount)")
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            let preview = String(data: data, encoding: .utf8)?.prefix(500) ?? ""
+            NSLog("copybara: Logfire POST parent ← HTTP \(status): \(preview)")
+        } catch {
+            NSLog("copybara: Logfire POST parent failed: \(error.localizedDescription)")
+        }
+    }
+
     private func otlpAttr(_ key: String, string value: String) -> [String: Any] {
         ["key": key, "value": ["stringValue": value]]
     }
@@ -154,7 +275,7 @@ final class LogfireLogger {
         ["key": key, "value": ["boolValue": value]]
     }
 
-    private static func randomHex(byteCount: Int) -> String {
+    static func randomHex(byteCount: Int) -> String {
         var bytes = [UInt8](repeating: 0, count: byteCount)
         for i in 0..<byteCount { bytes[i] = UInt8.random(in: 0...255) }
         return bytes.map { String(format: "%02x", $0) }.joined()

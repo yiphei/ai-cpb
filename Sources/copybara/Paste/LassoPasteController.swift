@@ -109,12 +109,17 @@ final class LassoPasteController: LassoViewDelegate {
 
         let copyPngs = ContextStore.shared.copies.map(\.imagePng)
         let client = makeClient()
+        let parentSpan = LogfirePasteSpan(name: "AI Lasso Paste",
+                                          kind: "lasso",
+                                          config: Config.shared.logfire)
         let results = await runParallelCalls(
             client: client,
             copyPngs: copyPngs,
             annotatedDestPerCall: annotatedPngs,
-            totalFields: fields.count
+            totalFields: fields.count,
+            parentSpan: parentSpan
         )
+        parentSpan.finish(callCount: annotatedPngs.count)
 
         await PasteIndicator.shared.hide()
 
@@ -248,7 +253,8 @@ final class LassoPasteController: LassoViewDelegate {
         client: LLMClient,
         copyPngs: [Data],
         annotatedDestPerCall: [(index: Int, png: Data)],
-        totalFields: Int
+        totalFields: Int,
+        parentSpan: LogfirePasteSpan
     ) async -> [FieldResult] {
         await withTaskGroup(of: FieldResult.self) { group in
             for entry in annotatedDestPerCall {
@@ -257,12 +263,14 @@ final class LassoPasteController: LassoViewDelegate {
                 let png = entry.png
                 let copies = copyPngs
                 let clientCopy = client
+                let parent = parentSpan
                 group.addTask {
                     do {
                         let text = try await clientCopy.paste(
                             copyPngs: copies,
                             destPng: png,
-                            trailingUserText: trailing
+                            trailingUserText: trailing,
+                            parentSpan: parent
                         )
                         if text == "<<NO_PASTE>>" {
                             return FieldResult(index: idx, text: nil, error: "AI declined")

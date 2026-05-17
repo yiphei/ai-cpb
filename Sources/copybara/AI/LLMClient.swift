@@ -47,7 +47,8 @@ protocol LLMClient {
 extension LLMClient {
     func paste(copyPngs: [Data],
                destPng: Data,
-               trailingUserText: String? = nil) async throws -> String {
+               trailingUserText: String? = nil,
+               parentSpan: LogfirePasteSpan? = nil) async throws -> String {
         let startTime = Date()
         let prompt = llmSystemPrompt(now: startTime)
         NSLog("copybara: \(Self.self).paste() start (logfire configured=\(Config.shared.logfire != nil))")
@@ -75,7 +76,9 @@ extension LLMClient {
                         inputTokens: inputTokens,
                         outputTokens: outputTokens,
                         httpStatus: httpStatus,
-                        errorMessage: errorMessage
+                        errorMessage: errorMessage,
+                        parentTraceId: parentSpan?.traceId,
+                        parentSpanId: parentSpan?.spanId
                     ),
                     config: lf
                 )
