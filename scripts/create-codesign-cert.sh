@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create a self-signed code-signing identity called "ai-cpb-local" with a
+# Create a self-signed code-signing identity called "copybara-local" with a
 # working private key, and import it into the login keychain so `codesign`
 # can use it without further prompts.
 #
@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-NAME="ai-cpb-local"
+NAME="copybara-local"
 KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

@@ -18,7 +18,7 @@ enum Permissions {
                     .joined(separator: "\n")
                 Notify.error(
                     "Missing permissions",
-                    "ai-cpb needs the following permissions to work:\n\n\(missing)\n\n" +
+                    "Copybara needs the following permissions to work:\n\n\(missing)\n\n" +
                     "Grant them in System Settings → Privacy & Security, then fully quit and relaunch the app."
                 )
                 if !screen {

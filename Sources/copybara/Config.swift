@@ -8,17 +8,17 @@ struct LogfireConfig {
 final class Config {
     static let shared = Config()
 
-    static let didChangeNotification = Notification.Name("aicpb.Config.didChange")
-    static let hotkeysDidChangeNotification = Notification.Name("aicpb.Config.hotkeysDidChange")
+    static let didChangeNotification = Notification.Name("copybara.Config.didChange")
+    static let hotkeysDidChangeNotification = Notification.Name("copybara.Config.hotkeysDidChange")
 
     static let configDirURL: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        return home.appendingPathComponent(".config/ai-cpb", isDirectory: true)
+        return home.appendingPathComponent(".config/copybara", isDirectory: true)
     }()
 
     static let configFileURL: URL = configDirURL.appendingPathComponent("config.json")
 
-    static let providerDefaultsKey = "aicpb.provider"
+    static let providerDefaultsKey = "copybara.provider"
 
     private(set) var provider: LLMProvider = .openRouter
     private(set) var apiKey: String?
@@ -64,9 +64,9 @@ final class Config {
             do {
                 try Keychain.writeString(legacy, account: Keychain.openRouterAccount)
                 apiKey = legacy
-                NSLog("ai-cpb: migrated legacy api key from config.json into Keychain")
+                NSLog("copybara: migrated legacy api key from config.json into Keychain")
             } catch {
-                NSLog("ai-cpb: legacy api key migration FAILED: \(error)")
+                NSLog("copybara: legacy api key migration FAILED: \(error)")
             }
         }
 
@@ -136,7 +136,7 @@ final class Config {
                 withJSONObject: obj, options: [.prettyPrinted, .sortedKeys])
             try data.write(to: Config.configFileURL, options: .atomic)
         } catch {
-            NSLog("ai-cpb: failed to rewrite config.json: \(error)")
+            NSLog("copybara: failed to rewrite config.json: \(error)")
         }
     }
 }

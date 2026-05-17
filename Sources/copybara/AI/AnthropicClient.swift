@@ -61,12 +61,12 @@ struct AnthropicClient: LLMClient {
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else {
-            throw NSError(domain: "ai-cpb", code: -1,
+            throw NSError(domain: "copybara", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: "Non-HTTP response."])
         }
         if http.statusCode < 200 || http.statusCode >= 300 {
             let body = String(data: data, encoding: .utf8) ?? "<no body>"
-            throw NSError(domain: "ai-cpb", code: http.statusCode,
+            throw NSError(domain: "copybara", code: http.statusCode,
                           userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(body)"])
         }
 
@@ -74,7 +74,7 @@ struct AnthropicClient: LLMClient {
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
             let blocks = root["content"] as? [[String: Any]]
         else {
-            throw NSError(domain: "ai-cpb", code: -2,
+            throw NSError(domain: "copybara", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "Unexpected response shape."])
         }
 
@@ -84,7 +84,7 @@ struct AnthropicClient: LLMClient {
         }
         let combinedText = textParts.joined()
         guard !combinedText.isEmpty else {
-            throw NSError(domain: "ai-cpb", code: -2,
+            throw NSError(domain: "copybara", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "Anthropic response had no text block."])
         }
 

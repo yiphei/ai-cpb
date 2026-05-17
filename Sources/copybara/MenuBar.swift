@@ -16,30 +16,30 @@ final class MenuBar {
     private var currentCopyCount: Int = 0
 
     func install() {
-        NSLog("ai-cpb: MenuBar.install() entered")
+        NSLog("copybara: MenuBar.install() entered")
         // Use a fixed, generous width so macOS cannot shrink us to 0pt.
         statusItem = NSStatusBar.system.statusItem(withLength: 90)
-        statusItem.autosaveName = "com.yanyiphei.aicpb.status"
+        statusItem.autosaveName = "com.yanyiphei.copybara.status"
         statusItem.isVisible = true
-        NSLog("ai-cpb: NSStatusItem length=\(statusItem.length), isVisible=\(statusItem.isVisible)")
+        NSLog("copybara: NSStatusItem length=\(statusItem.length), isVisible=\(statusItem.isVisible)")
         if let button = statusItem.button {
-            button.title = "AI-CPB"
+            button.title = "Copybara"
             button.font = NSFont.boldSystemFont(ofSize: 13)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 if let win = button.window {
-                    NSLog("ai-cpb: status item window frame = \(win.frame), screen = \(win.screen?.frame ?? .zero)")
+                    NSLog("copybara: status item window frame = \(win.frame), screen = \(win.screen?.frame ?? .zero)")
                 }
             }
             if let img = symbol("wand.and.stars") {
                 img.isTemplate = true
                 button.image = img
                 button.imagePosition = .imageLeft
-                NSLog("ai-cpb: set wand image + title on status button")
+                NSLog("copybara: set wand image + title on status button")
             } else {
-                NSLog("ai-cpb: SF Symbol missing; using text title only")
+                NSLog("copybara: SF Symbol missing; using text title only")
             }
         } else {
-            NSLog("ai-cpb: NSStatusItem has nil button (!)")
+            NSLog("copybara: NSStatusItem has nil button (!)")
         }
 
         let menu = NSMenu()
@@ -82,7 +82,7 @@ final class MenuBar {
         settings.target = self
         menu.addItem(settings)
 
-        let quit = NSMenuItem(title: "Quit ai-cpb",
+        let quit = NSMenuItem(title: "Quit Copybara",
                               action: #selector(NSApplication.terminate(_:)),
                               keyEquivalent: "q")
         menu.addItem(quit)

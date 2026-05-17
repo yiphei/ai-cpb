@@ -15,7 +15,7 @@ final class CopyModeController: LassoViewDelegate {
         if !screenOK {
             Notify.error(
                 "Screen Recording required",
-                "ai-cpb needs Screen Recording permission to capture pixels. Grant it in System Settings → Privacy & Security → Screen Recording, then fully quit and relaunch."
+                "Copybara needs Screen Recording permission to capture pixels. Grant it in System Settings → Privacy & Security → Screen Recording, then fully quit and relaunch."
             )
             _ = Permissions.checkScreenRecording(prompt: true)
             return

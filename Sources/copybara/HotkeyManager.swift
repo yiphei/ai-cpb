@@ -93,7 +93,7 @@ final class HotkeyManager {
             &ref
         )
         if status != noErr {
-            NSLog("ai-cpb: failed to register hotkey id=\(id.rawValue) combo=\(combo.displayString) status=\(status)")
+            NSLog("copybara: failed to register hotkey id=\(id.rawValue) combo=\(combo.displayString) status=\(status)")
             return nil
         }
         return ref
