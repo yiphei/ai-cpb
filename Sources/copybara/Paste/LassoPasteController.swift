@@ -130,6 +130,15 @@ final class LassoPasteController: LassoViewDelegate {
             )
         }
 
+        // Re-activate the target app before writing. The lasso overlay made
+        // copybara the frontmost app; synthesized ⌘V via CGEvent goes to the
+        // frontmost app, not to whichever element holds AX focus, so without
+        // this every paste lands in copybara (audible beep, no fill).
+        if let target = NSRunningApplication(processIdentifier: pid) {
+            target.activate()
+            try? await Task.sleep(nanoseconds: 200_000_000)   // let activation settle
+        }
+
         let saved = PasteboardDriver.snapshot()
         let writeFailures = await MultiFieldWriter.writeAll(ops)
         PasteboardDriver.restore(saved)
