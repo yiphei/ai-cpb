@@ -18,7 +18,7 @@ This document is self-contained for a single implementer. It assumes familiarity
 4. The destination screen is screenshotted. The screenshot is annotated with **all** detected field rects — **one in red (the call's target), the rest in gray** — and indices are drawn outside each box with a leader line.
 5. N LLM calls fire **in parallel**, one per detected field. Each call sees the same copy context, the same destination screenshot annotated with all sibling field rects, but with only its own field highlighted in red. Each call returns a single text value or `<<NO_PASTE>>`.
 6. Per field, the writer focuses the field, synthesizes `⌘A` to clear, writes the returned text to the pasteboard, synthesizes `⌘V`, waits, then advances to the next field. Pasteboard is snapshotted once at start, restored once at end.
-7. Failures (focus rejection, AX-set rejection, LLM error, per-field `<<NO_PASTE>>`) are collected and surfaced in a single notification at the end. Other fields still fill.
+7. Failures (focus rejection, LLM error, per-field `<<NO_PASTE>>`) are collected and surfaced in a single notification at the end. Other fields still fill.
 
 **Out of scope (explicitly):**
 
@@ -68,6 +68,7 @@ This document is self-contained for a single implementer. It assumes familiarity
 - Each field is filled with the LLM's returned text (after clearing the field via ⌘A).
 - If a per-field LLM call returns `<<NO_PASTE>>`, that field is left **untouched** (no clear, no write).
 - If a per-field LLM call throws (HTTP error, timeout), that field is left untouched and a per-field failure is recorded.
+- If focusing a field fails (AX rejects `kAXFocusedAttribute` and the window-raise retry also fails), that field is left untouched and a per-field failure is recorded.
 - At the end, if any failures occurred, surface a **single summary notification**: title `"Lasso paste completed with N issues"`, body listing per-field reasons (e.g., `"Field 2: AI declined. Field 4: HTTP 529."`).
 - Hotkey re-entrancy: while a lasso paste is in flight, the hotkey is suppressed via an `inFlight` guard (same pattern as `PasteController.run()`).
 
@@ -101,12 +102,13 @@ This document is self-contained for a single implementer. It assumes familiarity
 | `Sources/copybara/Config.swift` | Add `lassoPasteHotkey: HotkeyCombo`, default `.defaultLassoPaste`. Load/persist alongside existing `copy_hotkey` and `paste_hotkey` keys (JSON key: `"lasso_paste_hotkey"`). Add `setLassoPasteHotkey(_:)`. |
 | `Sources/copybara/HotkeyManager.swift` | Add `HotkeyID.lassoPaste = 3`, `onLassoPaste` callback, `lassoPasteRef`, register/unregister in `applyCurrentHotkeys()`. |
 | `Sources/copybara/AppDelegate.swift` | Wire `hotkeys.onLassoPaste = { Task { await LassoPasteController.shared.run() } }`. |
-| `Sources/copybara/Copy/LassoView.swift` | Parameterize tint color. Add `var tintColor: NSColor = .systemRed` property. Replace `NSColor.systemRed` literals in `draw(_:)` with `tintColor`. Existing call sites (copy mode) keep default. |
-| `Sources/copybara/Paste/ImageAnnotator.swift` | Add new entry point `drawNumberedBoxes(on:, fields:, on screen:) -> CGImage` accepting `[(rect: CGRect, color: CGColor, index: Int)]`. Keep existing `drawRedBox(...)` for the single-field paste path. |
+| `Sources/copybara/Copy/LassoView.swift` | Parameterize tint color. Add `var tintColor: NSColor = .systemRed` property. Replace `NSColor.systemRed` literals in `draw(_:)` with `tintColor`. Existing call sites (copy mode) keep the default; the new `LassoPasteController` sets `view.tintColor = .systemBlue` before installing the view. |
+| `Sources/copybara/Paste/ImageAnnotator.swift` | Add new entry point `drawNumberedBoxes(on:, fields:, on screen:) -> CGImage`. Keep existing `drawRedBox(...)` for the single-field paste path. See §4.4 for the input type. |
 | `Sources/copybara/Paste/PasteboardDriver.swift` | Add `sendCommandA()` mirroring `sendCommandV()` (uses `kVK_ANSI_A` instead of V). |
-| `Sources/copybara/Paste/AXHelper.swift` | No change to existing function. (Optional: factor the AX→AppKit conversion helper out if it ends up duplicated. Otherwise leave inline.) |
 | `Sources/copybara/UI/SettingsWindow.swift` | Add a third hotkey row for "AI Lasso Paste" using the existing `hotkeyRow` helper. |
-| `Sources/copybara/AI/AnthropicClient.swift` | Add `cache_control: {"type": "ephemeral"}` to the last block of the cacheable prefix (the trailing text after the final copy image). See §6. |
+| `Sources/copybara/AI/LLMClient.swift` | Add `trailingUserText: String?` parameter (default `nil`) to the `LLMClient.sendRequest` protocol method and the `paste(...)` extension helper. Default `nil` preserves the existing single-field caller. See §4.6. |
+| `Sources/copybara/AI/AnthropicClient.swift` | (a) Append the optional `trailingUserText` as the final text block in `userContent`, after the dest-image caption. (b) Add `cache_control: {"type": "ephemeral"}` to the last block of the cacheable prefix and to the system block. See §6. |
+| `Sources/copybara/AI/OpenRouterClient.swift` | Append the optional `trailingUserText` as the final text block in `userContent`, after the dest-image caption. (Prompt caching not added — see §6.4.) |
 
 ---
 
@@ -284,25 +286,31 @@ Internally reuses the AX-to-pixel conversion from `drawRedBox` (`ImageAnnotator.
 
 ### 4.5 Parallel LLM calls
 
-`LassoPasteController` runs N calls concurrently via `withTaskGroup`:
+`LassoPasteController` runs N calls concurrently via `withTaskGroup`. Each task calls the **extended** `LLMClient.paste(copyPngs:destPng:trailingUserText:)` (see §3.2 and §4.6), passing a per-call sibling-awareness sentence built from `currentIndex` and `totalFields`:
 
 ```swift
 struct FieldResult {
-    let index: Int   // 1-based
+    let index: Int        // 1-based
     let text: String?     // nil = field skipped or failed
     let error: String?    // human-readable reason (nil on success)
 }
 
-func runParallelCalls(
+private func runParallelCalls(
     client: LLMClient,
     copyPngs: [Data],
-    annotatedDestPerCall: [(index: Int, png: Data)]
+    annotatedDestPerCall: [(index: Int, png: Data)],
+    totalFields: Int
 ) async -> [FieldResult] {
     await withTaskGroup(of: FieldResult.self) { group in
         for entry in annotatedDestPerCall {
+            let trailing = siblingSentence(currentIndex: entry.index, totalFields: totalFields)
             group.addTask {
                 do {
-                    let text = try await client.paste(copyPngs: copyPngs, destPng: entry.png)
+                    let text = try await client.paste(
+                        copyPngs: copyPngs,
+                        destPng: entry.png,
+                        trailingUserText: trailing
+                    )
                     if text == "<<NO_PASTE>>" {
                         return FieldResult(index: entry.index, text: nil,
                                            error: "AI declined")
@@ -325,19 +333,19 @@ Notes:
 - Each call goes through the existing `LLMClient.paste(...)` extension method, which logs to Logfire automatically. N calls = N Logfire records.
 - The `LLMClient` value (`AnthropicClient` or `OpenRouterClient`) is shared across tasks — both are `Sendable` value types with no shared mutable state.
 - `URLSession.shared` handles N concurrent requests fine.
-- The existing `<<NO_PASTE>>` sentinel is preserved end-to-end: the existing prompt already documents it.
+- The existing `<<NO_PASTE>>` sentinel is preserved end-to-end: the existing system prompt already documents it.
 
-### 4.6 System-prompt addition for siblings
+### 4.6 Sibling-awareness sentence (per-call trailing user text)
 
-A new wrapper `llmSystemPromptForLasso(currentIndex:, totalFields:, now:)` extends the existing `llmSystemPrompt` with a sibling-awareness clause. To keep the cache-prefix stable across the N parallel calls, **do not** vary the system prompt per call. Instead, put the per-call sibling-awareness text into a small **non-cached** user-content block trailing the dest image.
+To keep the cache-prefix stable across the N parallel calls (§6), **do not** vary the system prompt per call. Instead, each call appends a small per-call text block to its `userContent` array **after** the dest-image caption. The `LLMClient` protocol is extended (§3.2) with a `trailingUserText: String?` parameter that both `AnthropicClient` and `OpenRouterClient` honor by appending it as the final text block in `userContent`.
 
-The simplest design: **don't change the system prompt at all.** Add a per-call trailing text block after the dest image, before sending:
+`LassoPasteController.siblingSentence(currentIndex:totalFields:)` produces:
 
 ```
-"This is field \(currentIndex) of \(totalFields). The destination image has \(totalFields) fields marked: yours is the RED box; the GRAY boxes are sibling fields being filled in parallel by separate calls. Consider the sibling fields' labels and positions when deciding what to output, so you do not duplicate content destined for them. Output ONLY the text for the RED field, or `<<NO_PASTE>>`."
+"This is field {currentIndex} of {totalFields}. The destination image has {totalFields} fields marked: yours is the RED box; the GRAY boxes are sibling fields being filled in parallel by separate calls. Consider the sibling fields' labels and positions when deciding what to output, so you do not output content that belongs in another field. Output ONLY the text for the RED field, or <<NO_PASTE>>."
 ```
 
-This sentence lives in the existing `userContent` array (appended after the dest-image text caption), **not** in the system prompt. That keeps the system prompt cacheable across calls.
+Because this text comes **after** the cache breakpoint (which sits on the last copy-image caption — see §6.2), it never invalidates the cached prefix. The system prompt is unchanged from the single-field path.
 
 ### 4.7 Multi-field writer (`MultiFieldWriter.swift`)
 
@@ -364,7 +372,8 @@ enum MultiFieldWriter {
         let focused = await focus(op.field.element)
         if !focused { return false }
 
-        // 2. Select all (so paste replaces instead of appending).
+        // 2. Select-all the field's existing content. ⌘V on a selection replaces it
+        //    (instead of inserting at the cursor), so any pre-existing text is overwritten.
         PasteboardDriver.sendCommandA()
         try? await Task.sleep(nanoseconds: 30_000_000)   // 30ms
 
@@ -553,7 +562,8 @@ final class LassoPasteController: LassoViewDelegate {
     }
 
     // ... helpers (preflight, makeClient, encodeAnnotatedVariants, summarizeFailures,
-    //     showLassoOverlay, pickActiveScreen, teardown, axRectFromScreenRect) ...
+    //     siblingSentence, showLassoOverlay, pickActiveScreen, teardown,
+    //     axRectFromScreenRect) ...
 }
 ```
 
@@ -629,13 +639,7 @@ The existing `hotkeyRow` helper requires no change. `KeyRecorderField` is unchan
 
 ---
 
-## 8. Hotkey collision avoidance
-
-`⌘⇧X` collides with **Cut** in many text contexts when typed inside a text field — but as a *global* Carbon hotkey registered via `RegisterEventHotKey`, it intercepts before app-level menus. The downside: while focused in a text field, `⌘⇧X` will fire lasso paste instead of cutting. Acceptable for the MVP — the user picked this hotkey deliberately. If it bites, they can rebind in Settings.
-
----
-
-## 9. Error handling matrix
+## 8. Error handling matrix
 
 | Failure | Behavior |
 |---|---|
@@ -658,7 +662,7 @@ The existing `hotkeyRow` helper requires no change. `KeyRecorderField` is unchan
 
 ---
 
-## 10. Acceptance criteria
+## 9. Acceptance criteria
 
 A lasso-paste build is considered conformant when all of the following hold:
 
@@ -678,7 +682,7 @@ A lasso-paste build is considered conformant when all of the following hold:
 
 ---
 
-## 11. References to existing code
+## 10. References to existing code
 
 | Existing pattern | File:line | What to reuse |
 |---|---|---|
