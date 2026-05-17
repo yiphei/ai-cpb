@@ -28,7 +28,7 @@ update: _bundle
     @open "{{INSTALLED_APP}}"
 
 # Wipe Keychain, prefs, and TCC grants, then install and launch — simulates a first-run install.
-fresh-install: _bundle
+install: _bundle
     @pkill -x {{EXE_NAME}} 2>/dev/null; true
     @echo "→ Wiping OpenRouter API key from Keychain"
     @security delete-generic-password -s {{BUNDLE_ID}} -a openrouter_api_key >/dev/null 2>&1; true
