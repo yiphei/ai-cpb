@@ -10,7 +10,11 @@ final class LassoPasteController: LassoViewDelegate {
     private var targetPID: pid_t?
     private var inFlight = false
 
-    func run() async {
+    /// Synchronous to match CopyModeController.begin(): NSWindow creation in
+    /// showLassoOverlay must run on the main thread. The hotkey handler dispatches
+    /// to .main, so calling this from there keeps overlay setup on the main thread.
+    /// The async pipeline kicks in later from lassoDidCommit.
+    func run() {
         if inFlight { return }
         inFlight = true
 
